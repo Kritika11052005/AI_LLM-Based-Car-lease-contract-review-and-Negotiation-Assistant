@@ -22,16 +22,18 @@ async def upload_contract(file: UploadFile = File(...)):
 
     db = SessionLocal()
     db.execute(
-        text("""
-            INSERT INTO contracts (filename, raw_text, ingestion_method)
-            VALUES (:f, :t, :m)
-        """),
-        {
-            "f": safe_name,
-            "t": raw_text,
-            "m": "auto"
-        }
-    )
+    text("""
+        INSERT INTO contracts (filename, raw_text, extracted_text, ingestion_method)
+        VALUES (:f, :raw, :ext, :m)
+    """),
+    {
+        "f": safe_name,
+        "raw": raw_text,
+        "ext": raw_text,
+        "m": "auto"
+    }
+)
+
     db.commit()
     db.close()
 
