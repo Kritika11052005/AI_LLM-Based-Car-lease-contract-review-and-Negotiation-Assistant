@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+
+langchain
+langchain-community
+pypdf
+
+pytesseract
+pdf2image
+pillow
+
+sqlalchemy
+psycopg2-binary
