@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pypdf
+pytesseract
+pdf2image
+pillow
+sqlalchemy
+psycopg2-binary
+langchain
