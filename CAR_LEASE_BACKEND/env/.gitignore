@@ -1,0 +1,16 @@
+cd "C:\Users\Thanuja\OneDrive\Desktop\AI_LLM Based Car lease contract review and Negotataion Assistant"
+echo # Python > .gitignore
+echo __pycache__/ >> .gitignore
+echo *.pyc >> .gitignore
+echo *.pyo >> .gitignore
+echo *.pyd >> .gitignore
+echo. >> .gitignore
+echo # Environments >> .gitignore
+echo venv/ >> .gitignore
+echo env/ >> .gitignore
+echo .venv >> .gitignore
+echo .env >> .gitignore
+echo. >> .gitignore
+echo # Logs >> .gitignore
+echo logs/ >> .gitignore
+echo *.log >> .gitignore
