@@ -14,8 +14,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 model Contract {
-  id         Int      @id @default(autoincrement())
-  filename   String
-  status     String   @default("uploaded")
-  uploadedAt DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  filename      String
+  filePath      String
+  fileSize      Int      @default(0)
+  extractedText String?
+  status        String   @default("uploaded")
+  uploadedAt    DateTime @default(now())
 }
