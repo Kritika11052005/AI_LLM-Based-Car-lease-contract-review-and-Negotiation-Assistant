@@ -13,7 +13,7 @@ print(f"Total Contracts Found: {len(rows)}\n")
 for row in rows:
     print(f"--- Contract ID: {row[0]} ---")
     print(f"Filename: {row[1]}")
-    # Print just the first 100 characters to prove it's there
-    print(f"Saved Text Start: {row[2][:100]}...\n")
+    # Print just the first 200 characters to prove it's there
+    print(f"Saved Text Start: {row[2][:200]}...\n")
 
 conn.close()

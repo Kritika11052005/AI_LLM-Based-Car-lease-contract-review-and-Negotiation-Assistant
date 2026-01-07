@@ -12,12 +12,10 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 # 2. DATABASE CONFIGURATION
-# Note: On Mac, the default user is usually your system username.
-# If this fails, try changing user to "postgres".
 DB_CONFIG = {
     "dbname": "carlease",
-    "user": "postgres",  # This matches your terminal username
-    "password": "2427",           # Postgres.app usually doesn't set a password by default
+    "user": "postgres",
+    "password": "2427",
     "host": "localhost",
     "port": "5432"
 }
