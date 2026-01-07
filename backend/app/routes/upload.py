@@ -1,15 +1,15 @@
 import os
-from fastapi import APIRouter, UploadFile, File
-from prisma import Prisma
+from fastapi import APIRouter, UploadFile, File, Depends
+from app.generated.prisma import Prisma
 from app.core.config import UPLOAD_DIR
+from app.database import get_db
 
 router = APIRouter()
-db = Prisma()
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload-contract")
-async def upload_contract(file: UploadFile = File(...)):
+async def upload_contract(file: UploadFile = File(...), db: Prisma = Depends(get_db)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
 
     with open(file_path, "wb") as f:

@@ -1,10 +1,8 @@
 from fastapi import FastAPI
-from prisma import Prisma
+from app.database import db
 from app.routes.upload import router as upload_router
 
 app = FastAPI(title="Car Contract Analysis API")
-
-db = Prisma()
 
 @app.on_event("startup")
 async def startup():
