@@ -1,36 +1,51 @@
 from fastapi import FastAPI, UploadFile, File
 import os
 import pdfplumber
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = FastAPI()
 
-# 1. SETUP FOLDERS & DATABASE
+# 1. SETUP FOLDERS
 UPLOAD_DIR = "uploaded_contracts"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# This creates a simple database file named "contracts.db"
-def init_db():
-    conn = sqlite3.connect("contracts.db")
-    cursor = conn.cursor()
-    # We create a table to store the filename and the text we find
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS contracts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename TEXT,
-            extracted_text TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
+# 2. DATABASE CONFIGURATION
+# Note: On Mac, the default user is usually your system username.
+# If this fails, try changing user to "postgres".
+DB_CONFIG = {
+    "dbname": "carlease",
+    "user": "postgres",  # This matches your terminal username
+    "password": "2427",           # Postgres.app usually doesn't set a password by default
+    "host": "localhost",
+    "port": "5432"
+}
 
-# Run the database setup immediately
+def init_db():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        # Create the table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contracts (
+                id SERIAL PRIMARY KEY,
+                filename TEXT,
+                extracted_text TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+        print("--- Database Connected & Table Ready ---")
+    except Exception as e:
+        print(f"Database Error: {e}")
+
+# Run setup immediately
 init_db()
 
 @app.get("/")
 def home():
-    return {"message": "Car Lease Assistant: Ready to Read!"}
+    return {"message": "Car Lease Assistant (PostgreSQL Version) is Running!"}
 
 @app.post("/upload")
 async def upload_contract(file: UploadFile = File(...)):
@@ -39,7 +54,7 @@ async def upload_contract(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
     
-    # B. EXTRACT TEXT (The "Reading" Part)
+    # B. EXTRACT TEXT
     extracted_text = ""
     try:
         with pdfplumber.open(file_path) as pdf:
@@ -50,18 +65,24 @@ async def upload_contract(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": f"Failed to read PDF: {str(e)}"}
 
-    # C. SAVE TO DATABASE (The "Memory" Part)
-    conn = sqlite3.connect("contracts.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO contracts (filename, extracted_text) VALUES (?, ?)", 
-                   (file.filename, extracted_text))
-    conn.commit()
-    conn.close()
+    # C. SAVE TO POSTGRESQL
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        # Note: We use %s here instead of ?
+        cursor.execute(
+            "INSERT INTO contracts (filename, extracted_text) VALUES (%s, %s) RETURNING id", 
+            (file.filename, extracted_text)
+        )
+        new_id = cursor.fetchone()[0] # Get the ID of the new row
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        return {"error": f"Database Save Failed: {str(e)}"}
     
-    # D. SHOW THE RESULT
     return {
         "status": "Success",
+        "contract_id": new_id,
         "filename": file.filename,
-        "message": "File saved and text extracted!",
-        "preview_text": extracted_text[:200] + "..." # Show first 200 characters
+        "preview_text": extracted_text[:200] + "..."
     }
