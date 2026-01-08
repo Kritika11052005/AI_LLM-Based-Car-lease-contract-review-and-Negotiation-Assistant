@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+
+# Environment
+.env
+
+# Uploads & OCR temp files
+uploads/
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.ppm
+*.pdf
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
