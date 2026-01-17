@@ -26,8 +26,13 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 filename TEXT NOT NULL,
                 raw_text TEXT,
+                sla_data JSONB,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """))
+        conn.execute(text("""
+            ALTER TABLE contracts
+            ADD COLUMN IF NOT EXISTS sla_data JSONB
         """))
     print("✓ Database initialized: contracts table ready")
 

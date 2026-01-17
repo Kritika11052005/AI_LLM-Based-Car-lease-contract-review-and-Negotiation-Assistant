@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
 from app.routes.upload import router as upload_router
+from app.routes.sla import router as sla_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,6 +30,7 @@ def startup_event():
 
 # Include routers
 app.include_router(upload_router, prefix="/api", tags=["Upload"])
+app.include_router(sla_router, prefix="/api", tags=["SLA"])
 
 # Root endpoint
 @app.get("/")

@@ -44,3 +44,11 @@ ENV/
 contracts/*.pdf
 contracts/*.txt
 *.log
+
+# Test files
+test_upload.py
+test_sla_extraction.py
+view_contracts.py
+
+# Dataset folder (manually uploaded to GitHub)
+../Dataset/
