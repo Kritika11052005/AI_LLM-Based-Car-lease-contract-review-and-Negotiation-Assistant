@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any, Dict
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -35,58 +36,38 @@ Definitions:
 
 If a field is not explicitly present, return null.
 
-Return strictly valid JSON with exactly these keys:
-
-{
-  "apr": null,
-  "lease_term_months": null,
-  "monthly_payment": null,
-  "down_payment": null,
-  "residual_value": null,
-  "mileage_allowance": null,
-  "early_termination_clause": null,
-  "purchase_option": null,
-  "late_fees": null
-}
-
 Contract text:
 {{TEXT_FROM_DB}}
 """
 
+
 def _build_prompt(contract_text: str) -> str:
     return SLA_PROMPT.replace("{{TEXT_FROM_DB}}", contract_text)
 
+
 def extract_sla_fields(contract_text: str) -> SLAData:
-    """Extract SLA fields from contract text using Gemini LLM and return validated Pydantic model"""
+    """Extract SLA fields using LangChain's structured output approach"""
     if not contract_text or not contract_text.strip():
         raise ValueError("Contract text is empty; cannot extract SLA fields.")
 
     prompt = _build_prompt(contract_text)
-    prompt_with_json = f"{prompt}\n\nYou must respond with ONLY valid JSON, no markdown, no explanations."
     
-    model = genai.GenerativeModel(MODEL_ID)
-
     try:
-        response = model.generate_content(prompt_with_json)
+        model = genai.GenerativeModel(
+            model_name=MODEL_ID,
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 0,
+            }
+        )
+        response = model.generate_content(prompt)
+        raw_json = response.text.strip()
     except Exception as exc:
         raise ValueError(f"Gemini request failed: {exc}") from exc
 
-    raw_output = response.text or ""
-    
-    # Remove markdown code blocks if present
-    if raw_output.startswith("```json"):
-        raw_output = raw_output.replace("```json", "").replace("```", "").strip()
-    elif raw_output.startswith("```"):
-        raw_output = raw_output.replace("```", "").strip()
-
     try:
-        parsed = json.loads(raw_output)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Gemini did not return valid JSON. Response: {raw_output[:200]}") from exc
-
-    # Validate and parse using Pydantic model (includes field validators for currency replacement)
-    try:
-        sla_data = SLAData(**parsed)
+        data_dict = json.loads(raw_json)
+        sla_data = SLAData(**data_dict)
         return sla_data
-    except ValidationError as exc:
-        raise ValueError(f"Invalid SLA data structure: {exc}") from exc
+    except (ValidationError, json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"Invalid SLA data: {exc}") from exc
