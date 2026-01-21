@@ -18,7 +18,8 @@ model Contract {
   filename      String
   filePath      String
   fileSize      Int      @default(0)
-  extractedText String?
+  extractedText String?  @db.Text
+  extractedData Json?    @db.JsonB  
   status        String   @default("uploaded")
   uploadedAt    DateTime @default(now())
 }

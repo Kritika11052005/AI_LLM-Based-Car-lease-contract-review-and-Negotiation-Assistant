@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.database import db
 from app.routes.upload import router as upload_router
+from app.routes.vin import router as vin_router
 
 app = FastAPI(title="Car Contract Analysis API")
 
@@ -13,6 +14,7 @@ async def shutdown():
     await db.disconnect()
 
 app.include_router(upload_router, prefix="/api")
+app.include_router(vin_router, prefix="/api")
 
 @app.get("/")
 def root():
