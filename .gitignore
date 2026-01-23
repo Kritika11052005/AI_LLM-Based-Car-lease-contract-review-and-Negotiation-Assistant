@@ -1,0 +1,13 @@
+# API Keys and Secrets
+.env
+
+# Python Environment
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# PostgreSQL / Local Database
+# If you ever export your data, keep the dumps out of GitHub
+*.sql
+*.dump
