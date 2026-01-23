@@ -27,12 +27,17 @@ def init_db():
                 filename TEXT NOT NULL,
                 raw_text TEXT,
                 sla_data JSONB,
+                vehicle_data JSONB,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         conn.execute(text("""
             ALTER TABLE contracts
             ADD COLUMN IF NOT EXISTS sla_data JSONB
+        """))
+        conn.execute(text("""
+            ALTER TABLE contracts
+            ADD COLUMN IF NOT EXISTS vehicle_data JSONB
         """))
     print("✓ Database initialized: contracts table ready")
 

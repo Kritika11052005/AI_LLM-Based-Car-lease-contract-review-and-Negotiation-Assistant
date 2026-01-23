@@ -1,9 +1,14 @@
-import json
+import warnings
+import sys
 import os
+from io import StringIO
+warnings.filterwarnings("ignore", message="Key 'title' is not supported")
+warnings.filterwarnings("ignore", message=".*title.*not supported.*")
+import json
 from typing import Any, Dict
 
-import google.generativeai as genai
 from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import ValidationError
 
 from app.models.sla import SLAData
@@ -14,9 +19,17 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set. Add it to your .env file.")
 
-genai.configure(api_key=GEMINI_API_KEY)
-
 MODEL_ID = "gemini-2.5-flash"
+
+# Initialize LangChain ChatGoogle LLM with structured output
+# Suppress "Key 'title' is not supported" messages from google-generativeai
+_old_stderr = sys.stderr
+sys.stderr = StringIO()
+try:
+    llm = ChatGoogleGenerativeAI(model=MODEL_ID, google_api_key=GEMINI_API_KEY)
+    structured_llm = llm.with_structured_output(SLAData)
+finally:
+    sys.stderr = _old_stderr
 
 SLA_PROMPT = """
 You are a contract analysis assistant.
@@ -53,21 +66,31 @@ def extract_sla_fields(contract_text: str) -> SLAData:
     prompt = _build_prompt(contract_text)
     
     try:
-        model = genai.GenerativeModel(
-            model_name=MODEL_ID,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0,
-            }
-        )
-        response = model.generate_content(prompt)
-        raw_json = response.text.strip()
+        # LangChain handles schema enforcement and returns SLAData directly
+        # No manual JSON parsing needed - structured_llm returns a Python object
+        sla_data = structured_llm.invoke(prompt)
+        print(f"[DEBUG] LLM raw response type: {type(sla_data)}")
+        print(f"[DEBUG] LLM raw response: {sla_data}")
     except Exception as exc:
         raise ValueError(f"Gemini request failed: {exc}") from exc
 
     try:
-        data_dict = json.loads(raw_json)
-        sla_data = SLAData(**data_dict)
-        return sla_data
-    except (ValidationError, json.JSONDecodeError, TypeError) as exc:
+        # Handle case where LLM returns a list instead of single object
+        if isinstance(sla_data, list):
+            if len(sla_data) == 0:
+                raise ValueError("LLM returned empty list")
+            sla_data = sla_data[0]
+        
+        # Handle case where response is wrapped in {'args': {...}, 'type': 'SLAData'}
+        if isinstance(sla_data, dict) and 'args' in sla_data:
+            sla_data = sla_data['args']
+        
+        # Verify it's a valid SLAData instance
+        if isinstance(sla_data, SLAData):
+            return sla_data
+        elif isinstance(sla_data, dict):
+            return SLAData(**sla_data)
+        else:
+            raise ValueError(f"LLM did not return SLAData instance, got {type(sla_data)}")
+    except (ValidationError, TypeError) as exc:
         raise ValueError(f"Invalid SLA data: {exc}") from exc

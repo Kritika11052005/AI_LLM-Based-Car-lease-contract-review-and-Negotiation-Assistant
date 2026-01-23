@@ -1,19 +1,23 @@
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class SLAData(BaseModel):
     """Pydantic model for SLA (Service Level Agreement) extracted fields from car lease contracts"""
     
-    apr: Optional[str] = Field(None, description="Annual percentage rate or interest rate")
-    lease_term_months: Optional[str] = Field(None, description="Total length of lease in months")
-    monthly_payment: Optional[str] = Field(None, description="Regular periodic payment amount")
-    down_payment: Optional[str] = Field(None, description="Upfront amount paid at lease start")
-    residual_value: Optional[str] = Field(None, description="Buyout price or estimated vehicle value at lease end")
-    mileage_allowance: Optional[str] = Field(None, description="Maximum allowed mileage")
-    early_termination_clause: Optional[str] = Field(None, description="Rules, fees, or penalties for ending early")
-    purchase_option: Optional[str] = Field(None, description="Whether and how lessee can purchase vehicle")
-    late_fees: Optional[str] = Field(None, description="Penalties for late payments")
+    model_config = ConfigDict(
+        json_schema_extra={"additionalProperties": False}
+    )
+    
+    apr: Optional[str] = None
+    lease_term_months: Optional[str] = None
+    monthly_payment: Optional[str] = None
+    down_payment: Optional[str] = None
+    residual_value: Optional[str] = None
+    mileage_allowance: Optional[str] = None
+    early_termination_clause: Optional[str] = None
+    purchase_option: Optional[str] = None
+    late_fees: Optional[str] = None
     
     @field_validator('*', mode='before')
     @classmethod
