@@ -5,34 +5,9 @@ from PyPDF2 import PdfReader
 import pytesseract
 from pdf2image import convert_from_bytes
 
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Text,Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not found in environment. Check your .env file.")
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-class Contract(Base):
-    __tablename__ = "contracts"
-    id = Column(Integer, primary_key=True, index=True)
-    file_name = Column(String(255))
-    raw_text = Column(Text)
-    apr = Column(Float, nullable=True)
-    lease_term_months = Column(Integer, nullable=True)
-    monthly_payment = Column(Float, nullable=True)
-    down_payment = Column(Float, nullable=True)
-    residual_value = Column(Float, nullable=True)
-    mileage_allowance = Column(Integer, nullable=True)
-
+from app.database import SessionLocal, engine
+from app.database import SessionLocal, engine
+from app.database import Base
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Milestone-1: Secure Document Upload & Store")
