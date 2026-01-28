@@ -1,5 +1,4 @@
 import os
-import json
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.generated.prisma import Prisma
 from app.core.config import UPLOAD_DIR
@@ -49,7 +48,10 @@ async def upload_contract(file: UploadFile = File(...), db: Prisma = Depends(get
 
 @router.post("/extract-sla/{contract_id}")
 async def extract_sla(contract_id: int, db: Prisma = Depends(get_db)):
-    """Extract SLA details from an uploaded contract using LLM"""
+    """Extract SLA details and VIN from an uploaded contract using LLM"""
+    from app.core.vin_extractor import VINExtractor
+    from app.core.vin_service import VINService
+    import json
     
     # Get contract from database
     contract = await db.contract.find_unique(where={"id": contract_id})
@@ -64,45 +66,159 @@ async def extract_sla(contract_id: int, db: Prisma = Depends(get_db)):
         # Extract SLA using LLM
         sla_data = LLMService.extract_sla_details(contract.extractedText)
         
-        # Convert Pydantic model to dict
-        sla_dict = sla_data.model_dump(exclude_none=True)
+        # Extract VIN from contract text
+        vin = VINExtractor.extract_vin(contract.extractedText)
         
-        # Debug: print what we're trying to save
-        print(f"SLA Dict before cleaning: {sla_dict}")
-        print(f"SLA Dict types: {[(k, type(v)) for k, v in sla_dict.items()]}")
+        # If VIN found, lookup vehicle data
+        vehicle_data = None
+        if vin:
+            vehicle_data = VINService.lookup_vin(vin)
+            # Remove raw_data to keep response clean
+            if "raw_data" in vehicle_data:
+                del vehicle_data["raw_data"]
         
-        # Use raw SQL to update with JSONB
-        # This bypasses Prisma's validation
-        await db.execute_raw(
-            f"""
-            UPDATE "Contract" 
-            SET "extractedData" = $1::jsonb, 
-                "status" = $2
-            WHERE id = $3
-            """,
-            json.dumps(sla_dict),
-            "sla_extracted",
-            contract_id
-        )
+        # Convert to JSON strings
+        sla_dict = sla_data.model_dump()
+        sla_json = json.dumps(sla_dict)
+        vehicle_json = json.dumps(vehicle_data) if vehicle_data else None
         
-        # Fetch the updated contract
+        # Use raw SQL to update (bypasses Prisma validation issues)
+        if vin and vehicle_json:
+            await db.execute_raw(
+                '''UPDATE "Contract" 
+                   SET "extractedData" = $1::jsonb, 
+                       "vin" = $2, 
+                       "vehicleData" = $3::jsonb,
+                       "status" = $4
+                   WHERE id = $5''',
+                sla_json, vin, vehicle_json, "completed", contract_id
+            )
+        elif vin:
+            await db.execute_raw(
+                '''UPDATE "Contract" 
+                   SET "extractedData" = $1::jsonb, 
+                       "vin" = $2,
+                       "status" = $3
+                   WHERE id = $4''',
+                sla_json, vin, "completed", contract_id
+            )
+        else:
+            await db.execute_raw(
+                '''UPDATE "Contract" 
+                   SET "extractedData" = $1::jsonb,
+                       "status" = $2
+                   WHERE id = $3''',
+                sla_json, "completed", contract_id
+            )
+        
+        # Fetch updated contract
         updated_contract = await db.contract.find_unique(where={"id": contract_id})
         
         return {
-            "message": "SLA extraction completed",
+            "message": "SLA extraction and VIN lookup completed",
             "contract_id": updated_contract.id,
-            "sla_data": sla_dict
+            "sla_data": sla_dict,
+            "vin": vin,
+            "vehicle_data": vehicle_data
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        # Detailed error logging
         import traceback
-        error_trace = traceback.format_exc()
-        print(f"Error in extract_sla: {error_trace}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"SLA extraction failed: {str(e)}"
-        )
+        print(f"Error: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        
+    """Extract SLA details and VIN from an uploaded contract using LLM"""
+    from app.core.vin_extractor import VINExtractor
+    from app.core.vin_service import VINService
+    
+    # Get contract from database
+    contract = await db.contract.find_unique(where={"id": contract_id})
+    
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    
+    if not contract.extractedText:
+        raise HTTPException(status_code=400, detail="No extracted text available for this contract")
+    
+    try:
+        # Extract SLA using LLM
+        sla_data = LLMService.extract_sla_details(contract.extractedText)
+        
+        # Extract VIN from contract text
+        vin = VINExtractor.extract_vin(contract.extractedText)
+        
+        # If VIN found, lookup vehicle data
+        vehicle_data = None
+        if vin:
+            vehicle_data = VINService.lookup_vin(vin)
+            # Remove raw_data to keep response clean
+            if "raw_data" in vehicle_data:
+                del vehicle_data["raw_data"]
+        
+        # Convert SLA data to plain dict
+        sla_dict = sla_data.model_dump()
+        
+        # Update based on what data we have
+        if vin and vehicle_data:
+            updated_contract = await db.contract.update(
+                where={"id": contract_id},
+                data={
+                    "extractedData": sla_dict,
+                    "vin": vin,
+                    "vehicleData": vehicle_data,
+                    "status": "completed"
+                }
+            )
+        elif vin:
+            updated_contract = await db.contract.update(
+                where={"id": contract_id},
+                data={
+                    "extractedData": sla_dict,
+                    "vin": vin,
+                    "status": "completed"
+                }
+            )
+        else:
+            updated_contract = await db.contract.update(
+                where={"id": contract_id},
+                data={
+                    "extractedData": sla_dict,
+                    "status": "completed"
+                }
+            )
+        
+        return {
+            "message": "SLA extraction and VIN lookup completed",
+            "contract_id": updated_contract.id,
+            "sla_data": sla_dict,
+            "vin": vin,
+            "vehicle_data": vehicle_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
+@router.get("/contract-with-vehicle/{contract_id}")
+async def get_contract_with_vehicle(contract_id: int, db: Prisma = Depends(get_db)):
+    """
+    Get contract details combined with vehicle data
+    This retrieves stored SLA extraction and vehicle information
+    """
+    
+    # Get contract from database
+    contract = await db.contract.find_unique(where={"id": contract_id})
+    
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    
+    # Combine contract and vehicle data
+    return {
+        "message": "Contract and vehicle data retrieved successfully",
+        "contract_id": contract.id,
+        "filename": contract.filename,
+        "uploaded_at": contract.uploadedAt.isoformat(),
+        "status": contract.status,
+        "sla_data": contract.extractedData,
+        "vin": contract.vin,
+        "vehicle_data": contract.vehicleData
+    }

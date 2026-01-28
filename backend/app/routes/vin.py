@@ -22,9 +22,9 @@ async def lookup_vin(vin: str):
         vin_response = VINData(**validated_data)
         
         return {
-            "message": "VIN lookup successful",
-            "vehicle_data": vin_response.model_dump()
-        }
+    "message": "VIN lookup successful",
+    "vehicle_data": {k: v for k, v in vin_response.model_dump().items() if v is not None}
+}
         
     except HTTPException:
         raise
