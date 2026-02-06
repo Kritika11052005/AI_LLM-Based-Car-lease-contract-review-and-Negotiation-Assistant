@@ -1,27 +1,425 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-py"
   output   = "../app/generated/prisma"
+  recursive_type_depth = -1
+  enable_experimental_decimal = true
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  phone         String?   @db.VarChar(40)
+  fullName      String?   @db.VarChar(200) @map("full_name")
+  authProvider  String?   @db.VarChar(50) @map("auth_provider")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+  
+  contracts           Contract[]
+  negotiationThreads  NegotiationThread[]
+  auditEvents         AuditEvent[]
+  
+  @@map("users")
+}
+
+// ============================================
+// DEALERS, LENDERS, VEHICLES
+// ============================================
+
+model Dealer {
+  id           String    @id @default(uuid())
+  name         String?   @db.VarChar(255)
+  addressLine1 String?   @db.VarChar(255) @map("address_line1")
+  addressLine2 String?   @db.VarChar(255) @map("address_line2")
+  city         String?   @db.VarChar(50)
+  state        String?   @db.VarChar(60)
+  postalCode   String?   @db.VarChar(20) @map("postal_code")
+  country      String?   @db.VarChar(60)
+  phone        String?   @db.VarChar(40)
+  website      String?   @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  
+  contracts         Contract[]
+  negotiationThreads NegotiationThread[]
+  
+  @@map("dealers")
+}
+
+model Lender {
+  id        String    @id @default(uuid())
+  name      String?   @db.VarChar(255)
+  nmls_id   String?   @db.VarChar(50)
+  website   String?   @db.VarChar(255)
+  phone     String?   @db.VarChar(40)
+  address   String?   @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  contracts         Contract[]
+  negotiationThreads NegotiationThread[]
+  providers         Provider[]
+  
+  @@map("lenders")
+}
+
+model Vehicle {
+  id             String    @id @default(uuid())
+  vin            String?   @db.VarChar(17)
+  year           Int?
+  make           String?   @db.VarChar(100)
+  model          String?   @db.VarChar(100)
+  trim           String?   @db.VarChar(100)
+  bodyClass      String?   @db.VarChar(100) @map("body_class")
+  engine         String?   @db.VarChar(100)
+  drivetrain     String?   @db.VarChar(100)
+  fuelType       String?   @db.VarChar(50) @map("fuel_type")
+  odometerMiles  Decimal?  @db.Decimal(10,1) @map("odometer_miles")
+  colorExt       String?   @db.VarChar(60) @map("color_ext")
+  colorInt       String?   @db.VarChar(60) @map("color_int")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+  
+  contracts          Contract[]
+  recalls            VehicleRecall[]
+  reports            VehicleReport[]
+  priceRecommendations PriceRecommendation[]
+  
+  @@map("vehicles")
+}
+
+model VehicleRecall {
+  id           String   @id @default(uuid())
+  vehicleId    String   @map("vehicle_id")
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  recallNumber String?  @db.VarChar(100) @map("recall_number")
+  issueDate    DateTime? @map("issue_date")
+  component    String?  @db.VarChar(255)
+  summary      String?  @db.Text
+  remedy       String?  @db.Text
+  source       String?  @db.VarChar(100)
+  raw          Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  @@map("vehicle_recalls")
+}
+
+model VehicleReport {
+  id           String   @id @default(uuid())
+  vehicleId    String   @map("vehicle_id")
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  providerId   String   @map("provider_id")
+  provider     Provider @relation(fields: [providerId], references: [id])
+  title        String?  @db.VarChar(255)
+  reportType   String?  @db.VarChar(80) @map("report_type")
+  availability String?  @db.VarChar(40)
+  url          String?  @db.VarChar(512)
+  raw          Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  @@map("vehicle_reports")
+}
+
+model Provider {
+  id        String    @id @default(uuid())
+  lenderId  String?   @map("lender_id")
+  lender    Lender?   @relation(fields: [lenderId], references: [id])
+  name      String?   @db.VarChar(120)
+  kind      String?   @db.VarChar(40)
+  isFree    Boolean?  @default(false) @map("is_free")
+  baseUrl   String?   @db.VarChar(255) @map("base_url")
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  vehicleReports     VehicleReport[]
+  priceSources       PriceSource[]
+  providerCredentials ProviderCredential[]
+  integrationLogs    IntegrationLog[]
+  
+  @@map("providers")
+}
+
+model ProviderCredential {
+  id         String   @id @default(uuid())
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+  label      String?  @db.VarChar(100)
+  config     Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  @@map("provider_credentials")
+}
+
+// ============================================
+// CONTRACTS
+// ============================================
+
 model Contract {
-  id            Int      @id @default(autoincrement())
-  filename      String
-  filePath      String
-  fileSize      Int      @default(0)
-  extractedText String?  @db.Text
-  extractedData Json?    @db.JsonB
-  vin           String?
-  vehicleData   Json?    @db.JsonB
-  status        String   @default("uploaded")
-  uploadedAt    DateTime @default(now())
+  id              String         @id @default(uuid())
+  userId          String?        @map("user_id")
+  user            User?          @relation(fields: [userId], references: [id])
+  vehicleId       String?        @map("vehicle_id")
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id])
+  dealerId        String?        @map("dealer_id")
+  dealer          Dealer?        @relation(fields: [dealerId], references: [id])
+  lenderId        String?        @map("lender_id")
+  lender          Lender?        @relation(fields: [lenderId], references: [id])
+  contractType    String?        @db.VarChar(40) @map("contract_type")
+  docStatus       String?        @db.VarChar(40) @map("doc_status")
+  dealerOfferName String?        @db.VarChar(200) @map("dealer_offer_name")
+  contractDate    DateTime?      @map("contract_date") @db.Date
+  locale          String?        @db.VarChar(10)
+  currency        String?        @db.VarChar(3)
+  fairnessScore   Decimal?       @db.Decimal(5,2) @map("fairness_score")
+  redFlagLevel    String?        @map("red_flag_level")
+  notes           String?        @db.Text
+  
+  // NEW: Store negotiation intents generated by rules engine
+  negotiationIntents Json?       @db.JsonB @map("negotiation_intents")
+  
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime?      @updatedAt @map("updated_at")
+  
+  files               ContractFile[]
+  sla                 ContractSLA?  @relation("ContractToSLA")
+  extractions         Extraction[]
+  priceRecommendations PriceRecommendation[]
+  offerComparisons    OfferComparison[]
+  negotiationThreads  NegotiationThread[]
+  
+  @@map("contracts")
+}
+
+model ContractFile {
+  id          String    @id @default(uuid())
+  contractId  String    @map("contract_id")
+  contract    Contract  @relation(fields: [contractId], references: [id])
+  storageUrl  String?   @db.VarChar(512) @map("storage_url")
+  fileName    String?   @db.VarChar(255) @map("file_name")
+  mimeType    String?   @db.VarChar(100) @map("mime_type")
+  pageCount   Int?      @map("page_count")
+  uploadedAt  DateTime  @default(now()) @map("uploaded_at")
+  
+  pages       ContractPage[]
+  
+  @@map("contract_files")
+}
+
+model ContractPage {
+  id             String        @id @default(uuid())
+  contractFileId String        @map("contract_file_id")
+  contractFile   ContractFile  @relation(fields: [contractFileId], references: [id])
+  pageNumber     Int?          @map("page_number")
+  ocrText        String?       @db.Text @map("ocr_text")
+  ocrConfidence  Decimal?      @db.Decimal(5,2) @map("ocr_confidence")
+  thumbnailUrl   String?       @db.VarChar(512) @map("thumbnail_url")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  
+  extractedClauses ExtractedClause[]
+  
+  @@map("contract_pages")
+}
+
+model ExtractedClause {
+  id            String       @id @default(uuid())
+  extractionId  String?      @map("extraction_id")
+  extraction    Extraction?  @relation(fields: [extractionId], references: [id])
+  pageId        String?      @map("page_id")
+  page          ContractPage? @relation(fields: [pageId], references: [id])
+  clauseType    String?      @db.VarChar(100) @map("clause_type")
+  pageNumber    Int?         @map("page_number")
+  textSnippet   String?      @db.Text @map("text_snippet")
+  normalizedValue String?    @db.Text @map("normalized_value")
+  redFlagLevel  String?      @map("red_flag_level")
+  comment       String?      @db.Text
+  
+  @@map("extracted_clauses")
+}
+
+model ContractSLA {
+  id                    String    @id @default(uuid())
+  contractId            String    @unique @map("contract_id")
+  contract              Contract  @relation("ContractToSLA", fields: [contractId], references: [id])
+  aprPercent            Decimal?  @db.Decimal(6,3) @map("apr_percent")
+  moneyFactor           Decimal?  @db.Decimal(10,6) @map("money_factor")
+  termMonths            Int?      @map("term_months")
+  monthlyPayment        Decimal?  @db.Decimal(12,2) @map("monthly_payment")
+  downPayment           Decimal?  @db.Decimal(12,2) @map("down_payment")
+  feesTotal             Decimal?  @db.Decimal(12,2) @map("fees_total")
+  residualValue         Decimal?  @db.Decimal(12,2) @map("residual_value")
+  residualPercentMsrp   Decimal?  @db.Decimal(6,3) @map("residual_percent_msrp")
+  msrp                  Decimal?  @db.Decimal(12,2)
+  capCost               Decimal?  @db.Decimal(12,2) @map("cap_cost")
+  capCostReduction      Decimal?  @db.Decimal(12,2) @map("cap_cost_reduction")
+  mileageAllowanceYr    Int?      @map("mileage_allowance_yr")
+  mileageOverageFee     Decimal?  @db.Decimal(8,4) @map("mileage_overage_fee")
+  earlyTerminationFee   Decimal?  @db.Decimal(12,2) @map("early_termination_fee")
+  dispositionFee        Decimal?  @db.Decimal(12,2) @map("disposition_fee")
+  purchaseOptionPrice   Decimal?  @db.Decimal(12,2) @map("purchase_option_price")
+  insuranceRequirements String?   @db.Text @map("insurance_requirements")
+  maintenanceResp       String?   @db.Text @map("maintenance_resp")
+  warrantySummary       String?   @db.Text @map("warranty_summary")
+  lateFeePolicy         String?   @db.Text @map("late_fee_policy")
+  otherTerms            Json?     @db.JsonB @map("other_terms")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+  
+  @@map("contract_sla")
+}
+
+model Extraction {
+  id            String    @id @default(uuid())
+  contractId    String?   @map("contract_id")
+  contract      Contract? @relation(fields: [contractId], references: [id])
+  modelName     String?   @db.VarChar(70) @map("model_name")
+  promptVersion String?   @db.VarChar(60) @map("prompt_version")
+  status        String?   @map("extraction_status")
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  rawOutput     Json?     @db.JsonB @map("raw_output")
+  errorMessage  String?   @db.Text @map("error_message")
+  
+  extractedClauses ExtractedClause[]
+  
+  @@map("extractions")
+}
+
+// ============================================
+// PRICING & COMPARISONS
+// ============================================
+
+model PriceSource {
+  id          String    @id @default(uuid())
+  priceRecoId String?   @map("price_reco_id")
+  providerId  String?   @map("provider_id")
+  provider    Provider? @relation(fields: [providerId], references: [id])
+  sampleSize  Int?      @map("sample_size")
+  medianPrice Decimal?  @db.Decimal(12,2) @map("median_price")
+  minPrice    Decimal?  @db.Decimal(12,2) @map("min_price")
+  maxPrice    Decimal?  @db.Decimal(12,2) @map("max_price")
+  url         String?   @db.VarChar(512)
+  raw         Json?     @db.JsonB
+  
+  @@map("price_sources")
+}
+
+model PriceRecommendation {
+  id          String   @id @default(uuid())
+  vehicleId   String?  @map("vehicle_id")
+  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id])
+  geoPostal   String?  @db.VarChar(20) @map("geo_postal")
+  msrp        Decimal? @db.Decimal(12,2)
+  fairPriceLow Decimal? @db.Decimal(12,2) @map("fair_price_low")
+  fairPriceHigh Decimal? @db.Decimal(12,2) @map("fair_price_high")
+  basis       String?  @db.VarChar(160)
+  methodology String?  @db.Text
+  generatedAt DateTime @default(now()) @map("generated_at")
+  
+  contracts Contract[]
+  
+  @@map("price_recommendations")
+}
+
+model OfferComparison {
+  id               String    @id @default(uuid())
+  userId           String?   @map("user_id")
+  primaryContract  String?   @map("primary_contract")
+  comparedContract String?   @map("compared_contract")
+  comparisonJson   Json?     @db.JsonB @map("comparison_json")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  
+  contract Contract? @relation(fields: [primaryContract], references: [id])
+  
+  @@map("offer_comparisons")
+}
+
+// ============================================
+// NEGOTIATION
+// ============================================
+
+model NegotiationThread {
+  id         String    @id @default(uuid())
+  userId     String?   @map("user_id")
+  user       User?     @relation(fields: [userId], references: [id])
+  contractId String?   @map("contract_id")
+  contract   Contract? @relation(fields: [contractId], references: [id])
+  dealerId   String?   @map("dealer_id")
+  dealer     Dealer?   @relation(fields: [dealerId], references: [id])
+  lenderId   String?   @map("lender_id")
+  lender     Lender?   @relation(fields: [lenderId], references: [id])
+  channel    String?   @map("negotiation_channel")
+  subject    String?   @db.VarChar(255)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  closedAt   DateTime? @map("closed_at")
+  
+  messages NegotiationMessage[]
+  
+  @@map("negotiation_threads")
+}
+
+model NegotiationMessage {
+  id            String             @id @default(uuid())
+  threadId      String             @map("thread_id")
+  thread        NegotiationThread  @relation(fields: [threadId], references: [id])
+  senderRole    String             @db.VarChar(40) @map("sender_role")
+  body          String             @db.Text
+  suggestedText String?            @db.Text @map("suggested_text")
+  attachments   Json?              @db.JsonB
+  sentAt        DateTime           @default(now()) @map("sent_at")
+  
+  @@map("negotiation_messages")
+}
+
+// ============================================
+// AUDIT & LOGS
+// ============================================
+
+model IntegrationLog {
+  id             String    @id @default(cuid())
+  providerId     String?   @map("provider_id")
+  provider       Provider? @relation(fields: [providerId], references: [id])
+  requestPath    String?   @db.VarChar(512) @map("request_path")
+  requestParams  Json?     @db.JsonB @map("request_params")
+  responseStatus Int?      @map("response_status")
+  responseMs     Int?      @map("response_ms")
+  occurredAt     DateTime  @default(now()) @map("occurred_at")
+  errorMessage   String?   @db.Text @map("error_message")
+  
+  @@map("integration_logs")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  userId      String?  @map("user_id")
+  user        User?    @relation(fields: [userId], references: [id])
+  entityTable String?  @db.VarChar(80) @map("entity_table")
+  entityId    String?  @map("entity_id")
+  action      String?  @db.VarChar(40)
+  details     Json?    @db.JsonB
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  
+  @@map("audit_events")
+}
+
+// ============================================
+// TAGGING
+// ============================================
+
+model Tagging {
+  id         String    @id @default(uuid())
+  tag        String?   @db.VarChar(80)
+  entityTable String?  @db.VarChar(80) @map("entity_table")
+  entityId   String?   @map("entity_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  @@map("tagging")
 }
