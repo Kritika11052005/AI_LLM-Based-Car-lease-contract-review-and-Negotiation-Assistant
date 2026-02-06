@@ -1,0 +1,174 @@
+{
+  "apr": [
+    {
+      "condition": "missing",
+      "severity": "high",
+      "issue": "Interest rate not specified",
+      "reason": "Hidden interest may increase total cost.",
+      "negotiation_intent": "Request written APR disclosure"
+    },
+    {
+      "condition": "< 3",
+      "severity": "none",
+      "issue": "Low APR",
+      "reason": "Competitive interest rate.",
+      "negotiation_intent": null
+    },
+    {
+      "condition": "3 - 8",
+      "severity": "medium",
+      "issue": "Moderate APR",
+      "reason": "Interest rate could be improved.",
+      "negotiation_intent": "Request lower APR"
+    },
+    {
+      "condition": "> 10",
+      "severity": "high",
+      "issue": "High APR",
+      "reason": "Excessive interest rate.",
+      "negotiation_intent": "Negotiate lower interest"
+    }
+  ],
+
+  "lease_term_months": [
+    {
+      "condition": "missing",
+      "severity": "medium",
+      "issue": "Lease term not specified",
+      "reason": "Lease duration is unclear.",
+      "negotiation_intent": "Request lease term clarification"
+    },
+    {
+      "condition": "< 12",
+      "severity": "medium",
+      "issue": "Very short lease term",
+      "reason": "Lease duration is unusually short.",
+      "negotiation_intent": "Negotiate standard lease duration"
+    },
+    {
+      "condition": "12 - 48",
+      "severity": "none",
+      "issue": "Standard lease term",
+      "reason": "Lease duration is typical.",
+      "negotiation_intent": null
+    },
+    {
+      "condition": "> 60",
+      "severity": "high",
+      "issue": "Excessively long lease",
+      "reason": "Long lease term may cause overpayment.",
+      "negotiation_intent": "Reduce lease duration"
+    }
+  ],
+
+  "monthly_payment": [
+    {
+      "condition": "missing",
+      "severity": "high",
+      "issue": "Monthly payment missing",
+      "reason": "Total cost cannot be calculated.",
+      "negotiation_intent": "Request monthly payment breakdown"
+    },
+    {
+      "condition": "< 10000",
+      "severity": "none",
+      "issue": "Low monthly payment",
+      "reason": "Affordable payment.",
+      "negotiation_intent": null
+    },
+    {
+      "condition": "> 40000",
+      "severity": "high",
+      "issue": "Very high monthly payment",
+      "reason": "May exceed market norms.",
+      "negotiation_intent": "Request lower monthly payment"
+    }
+  ],
+
+  "down_payment": [
+    {
+      "condition": "missing",
+      "severity": "medium",
+      "issue": "Down payment missing",
+      "reason": "Upfront cost unclear.",
+      "negotiation_intent": "Request down payment amount"
+    },
+    {
+      "condition": "> 300000",
+      "severity": "high",
+      "issue": "High down payment",
+      "reason": "Large upfront burden.",
+      "negotiation_intent": "Negotiate lower down payment"
+    }
+  ],
+
+  "residual_value": [
+    {
+      "condition": "< 50%",
+      "severity": "high",
+      "issue": "Low residual value",
+      "reason": "Buyout price is unfavorable.",
+      "negotiation_intent": "Negotiate higher residual value"
+    }
+  ],
+
+  "mileage_allowance": [
+    {
+      "condition": "< 10000",
+      "severity": "medium",
+      "issue": "Low mileage allowance",
+      "reason": "May cause overage penalties.",
+      "negotiation_intent": "Request higher mileage allowance"
+    }
+  ],
+
+  "early_termination_clause": [
+    {
+      "condition": "missing",
+      "severity": "high",
+      "issue": "No early termination clause",
+      "reason": "Risk of unknown penalties.",
+      "negotiation_intent": "Request early termination terms"
+    }
+  ],
+
+  "purchase_option": [
+    {
+      "condition": "missing",
+      "severity": "medium",
+      "issue": "Purchase option missing",
+      "reason": "Cannot evaluate end-of-lease choice.",
+      "negotiation_intent": "Request buyout price"
+    }
+  ],
+
+  "maintenance_resp": [
+    {
+      "condition": "missing",
+      "severity": "medium",
+      "issue": "Maintenance responsibility unclear",
+      "reason": "Unexpected service costs.",
+      "negotiation_intent": "Clarify maintenance responsibility"
+    }
+  ],
+
+  "warranty_summary": [
+    {
+      "condition": "missing",
+      "severity": "medium",
+      "issue": "Warranty not specified",
+      "reason": "Risk of uncovered repairs.",
+      "negotiation_intent": "Request warranty details"
+    }
+  ],
+
+  "late_fees": [
+    {
+      "condition": "> 2000",
+      "severity": "high",
+      "issue": "High late fees",
+      "reason": "Punitive penalties.",
+      "negotiation_intent": "Negotiate lower late fees"
+    }
+  ]
+}
