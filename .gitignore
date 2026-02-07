@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 venv/
 .venv/
-
+uploads/
 # PostgreSQL / Local Database
 # If you ever export your data, keep the dumps out of GitHub
 *.sql
