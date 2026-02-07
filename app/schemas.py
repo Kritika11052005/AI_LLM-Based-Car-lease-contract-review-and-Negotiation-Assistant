@@ -1,17 +1,40 @@
-# app/schemas.py
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel
+from uuid import UUID
+from typing import Optional, List, Any, Dict
 
+# 1. Extraction schema for the LLM
 class ContractSLA(BaseModel):
-    apr: Optional[float] = Field(description="Annual percentage rate or interest rate")
-    lease_term_months: Optional[int] = Field(description="Total duration of the lease in months")
-    monthly_payment: Optional[float] = Field(description="Regular monthly payment amount")
-    down_payment: Optional[float] = Field(description="Upfront payment amount")
-    residual_value: Optional[float] = Field(description="The estimated value of the car at the end of the lease")
-    mileage_allowance: Optional[str] = Field(description="Total miles allowed per year or over the term")
-    overage_charges: Optional[str] = Field(description="Cost per mile if the allowance is exceeded")
-    early_termination_clause: Optional[str] = Field(description="Penalties or conditions for ending the lease early")
-    purchase_option: Optional[str] = Field(description="Terms for buying the vehicle at end of lease")
-    maintenance_responsibilities: Optional[str] = Field(description="Who is responsible for repairs and service")
-    warranty_coverage: Optional[str] = Field(description="Details of included warranty or insurance")
-    late_fees: Optional[str] = Field(description="Penalties for late payments")
+    apr_percent: Optional[float] = None
+    term_months: Optional[int] = None
+    monthly_payment: Optional[float] = None
+    down_payment: Optional[float] = None
+    residual_value: Optional[float] = None
+    purchase_option_price: Optional[float] = None
+    mileage_allowance_yr: Optional[int] = None
+    mileage_overage_fee: Optional[float] = None
+    early_termination_fee: Optional[float] = None
+    maintenance_resp: Optional[str] = None
+    late_fee_policy: Optional[str] = None
+    warranty_summary: Optional[str] = None
+
+# 2. Public response schema (Hides negotiation_summary)
+class ProcessContractResponse(BaseModel):
+    status: str
+    contract_id: UUID
+    contract_profile: Dict[str, Any]
+
+    class Config:
+        from_attributes = True
+
+# 3. Negotiation Logic (Internal use)
+class NegotiationPoint(BaseModel):
+    field: str
+    value_found: Optional[str] = None
+    severity: str  # "critical", "high", "medium", "low", "none"
+    issue: str
+    negotiation_intent: str
+    generated_chat_message: str
+
+class NegotiationStrategy(BaseModel):
+    fairness_score: int
+    risk_analysis: List[NegotiationPoint]
