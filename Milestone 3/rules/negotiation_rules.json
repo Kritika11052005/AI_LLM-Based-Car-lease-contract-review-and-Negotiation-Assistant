@@ -1,0 +1,516 @@
+{
+  "sla_rules": [
+    {
+      "field": "apr",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "critical",
+          "issue": "APR not disclosed",
+          "reason": "Interest rate is a mandatory disclosure by law.",
+          "negotiation_intent": "Demand APR disclosure before proceeding"
+        },
+        {
+          "condition": "< 3.0",
+          "severity": "none",
+          "issue": "Excellent APR",
+          "reason": "APR is well below current market averages.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "3.0 - 5.0",
+          "severity": "none",
+          "issue": "Good APR",
+          "reason": "APR is competitive with current rates.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "5.1 - 7.0",
+          "severity": "low",
+          "issue": "Average APR",
+          "reason": "APR is at market average, room for improvement.",
+          "negotiation_intent": "Request slight APR reduction"
+        },
+        {
+          "condition": "7.1 - 9.0",
+          "severity": "medium",
+          "issue": "High APR",
+          "reason": "APR is above current market rates.",
+          "negotiation_intent": "Negotiate APR reduction"
+        },
+        {
+          "condition": "> 9.0",
+          "severity": "high",
+          "issue": "Excessive APR",
+          "reason": "APR is significantly above market rates.",
+          "negotiation_intent": "Demand substantial APR reduction"
+        }
+      ]
+    },
+    {
+      "field": "lease_term_months",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Lease term not specified",
+          "reason": "Contract duration is undefined.",
+          "negotiation_intent": "Request clear term specification"
+        },
+        {
+          "condition": "< 24",
+          "severity": "medium",
+          "issue": "Very short lease term",
+          "reason": "Short terms often have higher monthly payments.",
+          "negotiation_intent": "Consider longer term for better rates"
+        },
+        {
+          "condition": "24 - 36",
+          "severity": "none",
+          "issue": "Optimal lease term",
+          "reason": "36 months is industry standard for best value.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "37 - 48",
+          "severity": "low",
+          "issue": "Extended lease term",
+          "reason": "Longer terms increase maintenance risks.",
+          "negotiation_intent": "Request maintenance package inclusion"
+        },
+        {
+          "condition": "> 48",
+          "severity": "high",
+          "issue": "Excessively long lease",
+          "reason": "Risk of out-of-warranty repairs and higher total cost.",
+          "negotiation_intent": "Reduce lease term to 36 months"
+        }
+      ]
+    },
+    {
+      "field": "monthly_payment",
+      "type": "value_check",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "critical",
+          "issue": "Payment amount not specified",
+          "reason": "Cannot calculate affordability without payment amount.",
+          "negotiation_intent": "Demand payment schedule disclosure"
+        },
+        {
+          "condition": "> 1.8% of msrp",
+          "severity": "high",
+          "issue": "High monthly payment",
+          "reason": "Payment exceeds reasonable percentage of vehicle value.",
+          "negotiation_intent": "Request payment reduction"
+        },
+        {
+          "condition": "1.5% - 1.8% of msrp",
+          "severity": "medium",
+          "issue": "Above average payment",
+          "reason": "Payment is higher than typical for this vehicle class.",
+          "negotiation_intent": "Negotiate payment reduction"
+        },
+        {
+          "condition": "1.2% - 1.49% of msrp",
+          "severity": "low",
+          "issue": "Fair monthly payment",
+          "reason": "Payment is reasonable but could be improved.",
+          "negotiation_intent": "Request minor payment adjustment"
+        },
+        {
+          "condition": "< 1.2% of msrp",
+          "severity": "none",
+          "issue": "Excellent monthly payment",
+          "reason": "Payment is very competitive.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "down_payment",
+      "type": "value_check",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Down payment not specified",
+          "reason": "Initial cost is unclear.",
+          "negotiation_intent": "Request down payment details"
+        },
+        {
+          "condition": "> 3000",
+          "severity": "high",
+          "issue": "Large down payment",
+          "reason": "High down payments increase risk if vehicle is totaled.",
+          "negotiation_intent": "Request lower down payment"
+        },
+        {
+          "condition": "2000 - 3000",
+          "severity": "medium",
+          "issue": "Moderate down payment",
+          "reason": "Down payment is average but could be reduced.",
+          "negotiation_intent": "Negotiate down payment reduction"
+        },
+        {
+          "condition": "1000 - 1999",
+          "severity": "low",
+          "issue": "Reasonable down payment",
+          "reason": "Down payment is within typical range.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "0 - 999",
+          "severity": "none",
+          "issue": "Low down payment",
+          "reason": "Minimal upfront cost reduces initial risk.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "residual_value",
+      "type": "percentage_check",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "high",
+          "issue": "Residual value not disclosed",
+          "reason": "Cannot determine lease-end purchase option.",
+          "negotiation_intent": "Demand residual value disclosure"
+        },
+        {
+          "condition": "< 48% of msrp",
+          "severity": "high",
+          "issue": "Low residual value",
+          "reason": "High depreciation assumption benefits lessor.",
+          "negotiation_intent": "Request higher residual percentage"
+        },
+        {
+          "condition": "48% - 52% of msrp",
+          "severity": "medium",
+          "issue": "Below average residual",
+          "reason": "Residual is lower than typical for this term.",
+          "negotiation_intent": "Negotiate higher residual value"
+        },
+        {
+          "condition": "53% - 58% of msrp",
+          "severity": "none",
+          "issue": "Standard residual value",
+          "reason": "Residual is within expected range for lease term.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "> 58% of msrp",
+          "severity": "none",
+          "issue": "High residual value",
+          "reason": "Good potential purchase option at lease end.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "mileage_allowance",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Mileage allowance not specified",
+          "reason": "Potential for unlimited overage charges.",
+          "negotiation_intent": "Request mileage allowance specification"
+        },
+        {
+          "condition": "< 10000",
+          "severity": "high",
+          "issue": "Very low mileage allowance",
+          "reason": "Most drivers exceed 10,000 miles annually.",
+          "negotiation_intent": "Increase to at least 12,000 miles"
+        },
+        {
+          "condition": "10000 - 11999",
+          "severity": "medium",
+          "issue": "Low mileage allowance",
+          "reason": "Allowance may not cover average driving.",
+          "negotiation_intent": "Request 12,000-15,000 mile allowance"
+        },
+        {
+          "condition": "12000 - 15000",
+          "severity": "none",
+          "issue": "Standard mileage allowance",
+          "reason": "Covers average annual driving distance.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "> 15000",
+          "severity": "none",
+          "issue": "Generous mileage allowance",
+          "reason": "Provides buffer for above-average driving.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "excess_mileage_fee",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Overage charges not specified",
+          "reason": "Risk of unlimited charges for excess mileage.",
+          "negotiation_intent": "Request overage charge disclosure"
+        },
+        {
+          "condition": "> 0.30",
+          "severity": "high",
+          "issue": "Excessive mileage charges",
+          "reason": "Per-mile charge is above industry standard.",
+          "negotiation_intent": "Reduce to $0.20-$0.25 per mile"
+        },
+        {
+          "condition": "0.25 - 0.30",
+          "severity": "medium",
+          "issue": "High mileage charges",
+          "reason": "Per-mile charge is at high end of market.",
+          "negotiation_intent": "Negotiate lower per-mile rate"
+        },
+        {
+          "condition": "0.15 - 0.24",
+          "severity": "none",
+          "issue": "Standard mileage charges",
+          "reason": "Per-mile charge is within market range.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "< 0.15",
+          "severity": "none",
+          "issue": "Low mileage charges",
+          "reason": "Per-mile charge is very competitive.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "early_termination_clause",
+      "type": "text_analysis",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "high",
+          "issue": "Termination terms not specified",
+          "reason": "Cannot assess risk of early exit.",
+          "negotiation_intent": "Request clear termination terms"
+        },
+        {
+          "condition": "contains 'remaining payments'",
+          "severity": "high",
+          "issue": "Full remaining payments required",
+          "reason": "Most expensive termination option.",
+          "negotiation_intent": "Request prorated termination formula"
+        },
+        {
+          "condition": "contains '3 months payment'",
+          "severity": "medium",
+          "issue": "Three-month termination penalty",
+          "reason": "Above average but not uncommon.",
+          "negotiation_intent": "Reduce to 2 months payment maximum"
+        },
+        {
+          "condition": "contains '2 months payment'",
+          "severity": "low",
+          "issue": "Standard termination penalty",
+          "reason": "Typical early termination structure.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "contains 'fair market value'",
+          "severity": "none",
+          "issue": "Fair termination terms",
+          "reason": "Termination based on actual vehicle value.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "purchase_option_price",
+      "type": "value_check",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Purchase option not specified",
+          "reason": "No ability to purchase vehicle at lease end.",
+          "negotiation_intent": "Request purchase option inclusion"
+        },
+        {
+          "condition": "> residual_value * 1.15",
+          "severity": "high",
+          "issue": "Above market purchase price",
+          "reason": "Purchase option exceeds expected market value.",
+          "negotiation_intent": "Request purchase price at fair market value"
+        },
+        {
+          "condition": "= residual_value",
+          "severity": "none",
+          "issue": "Standard purchase option",
+          "reason": "Purchase price matches residual value.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "< residual_value",
+          "severity": "none",
+          "issue": "Favorable purchase option",
+          "reason": "Purchase price below residual value.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "maintenance_responsibilities",
+      "type": "text_analysis",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Maintenance terms not specified",
+          "reason": "Unclear who is responsible for maintenance costs.",
+          "negotiation_intent": "Request clear maintenance terms"
+        },
+        {
+          "condition": "contains 'lessee responsible for all'",
+          "severity": "high",
+          "issue": "Full lessee maintenance responsibility",
+          "reason": "Lessee bears all maintenance costs and risks.",
+          "negotiation_intent": "Request maintenance package inclusion"
+        },
+        {
+          "condition": "contains 'routine maintenance only'",
+          "severity": "medium",
+          "issue": "Limited maintenance coverage",
+          "reason": "Major repairs not covered.",
+          "negotiation_intent": "Request comprehensive maintenance package"
+        },
+        {
+          "condition": "contains 'full maintenance included'",
+          "severity": "none",
+          "issue": "Full maintenance coverage",
+          "reason": "Lessor covers all maintenance and repairs.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "warranty_coverage_months",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Warranty details not specified",
+          "reason": "Cannot assess repair cost risk.",
+          "negotiation_intent": "Request warranty documentation"
+        },
+        {
+          "condition": "< 36",
+          "severity": "high",
+          "issue": "Short warranty coverage",
+          "reason": "Warranty may expire before lease ends.",
+          "negotiation_intent": "Ensure full lease coverage under warranty"
+        },
+        {
+          "condition": "36 - 60",
+          "severity": "none",
+          "issue": "Standard warranty coverage",
+          "reason": "Warranty covers typical lease duration.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "> 60",
+          "severity": "none",
+          "issue": "Extended warranty coverage",
+          "reason": "Warranty extends beyond typical lease term.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "insurance_requirements",
+      "type": "text_analysis",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "medium",
+          "issue": "Insurance requirements not specified",
+          "reason": "Unclear what coverage is mandatory.",
+          "negotiation_intent": "Request clear insurance requirements"
+        },
+        {
+          "condition": "contains 'gap insurance required'",
+          "severity": "none",
+          "issue": "Gap insurance required",
+          "reason": "Standard protection against total loss scenarios.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "contains 'gap insurance not required'",
+          "severity": "high",
+          "issue": "No gap insurance requirement",
+          "reason": "Lessee bears risk of vehicle being totaled.",
+          "negotiation_intent": "Add gap insurance requirement"
+        },
+        {
+          "condition": "contains 'deductible ≤ 1000'",
+          "severity": "low",
+          "issue": "Reasonable deductible requirement",
+          "reason": "Allows for manageable out-of-pocket costs.",
+          "negotiation_intent": null
+        }
+      ]
+    },
+    {
+      "field": "late_fee_amount",
+      "type": "range",
+      "scenarios": [
+        {
+          "condition": "missing",
+          "severity": "low",
+          "issue": "Late fee not specified",
+          "reason": "Unclear penalty for late payments.",
+          "negotiation_intent": "Request late fee disclosure"
+        },
+        {
+          "condition": "> 50",
+          "severity": "high",
+          "issue": "High late payment fee",
+          "reason": "Late fee exceeds typical $25-$35 range.",
+          "negotiation_intent": "Reduce late fee to $35 or less"
+        },
+        {
+          "condition": "35 - 50",
+          "severity": "medium",
+          "issue": "Above average late fee",
+          "reason": "Late fee is higher than industry standard.",
+          "negotiation_intent": "Negotiate lower late fee"
+        },
+        {
+          "condition": "25 - 34",
+          "severity": "none",
+          "issue": "Standard late payment fee",
+          "reason": "Late fee is within typical range.",
+          "negotiation_intent": null
+        },
+        {
+          "condition": "< 25",
+          "severity": "none",
+          "issue": "Low late payment fee",
+          "reason": "Late fee is very reasonable.",
+          "negotiation_intent": null
+        }
+      ]
+    }
+  ]
+}
