@@ -3,7 +3,6 @@ import requests
 import uuid
 from datetime import datetime
 
-# --- CONFIGURATION ---
 BASE_URL = "http://localhost:8000"
 
 st.set_page_config(
@@ -557,4 +556,5 @@ st.markdown("""
 <div style="text-align: center; color: #666; padding: 20px;">
     <p>📑 <strong>ContractClarity</strong> • AI-Powered Lease Analysis</p>
 </div>
+
 """, unsafe_allow_html=True)
