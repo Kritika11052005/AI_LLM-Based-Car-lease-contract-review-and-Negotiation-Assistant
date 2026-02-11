@@ -5,35 +5,38 @@ from app.services.llm_client import call_llm
 from app.services.chat_persistence import (
     save_conversation,
     get_sla_from_db,
-    load_memory
+    load_memory,
+    get_chat_history
 )
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
+
+# MAIN CHAT ENDPOINT
 @router.post("")
 def chat(contract_id: int, message: str):
 
-    # 1. Load extracted contract data
+    # Load contract SLA
     sla = get_sla_from_db(contract_id)
 
-    # 2. Apply rules (internal only)
+    # Apply risk rules
     flags = apply_rules(sla)
 
-    # 3. Load conversation memory
+    # Load previous conversation
     memory = load_memory(contract_id)
 
-    # 4. Build negotiation prompt
+    # Build prompt
     prompt = build_prompt(
         sla=sla,
-        risk_context=flags,   # internal
+        risk_context=flags,
         memory=memory,
         user_message=message
     )
 
-    # 5. Ask LLM
+    # Call LLM
     reply = call_llm(prompt)
 
-    # 6. Store conversation FIRST (with flags)
+    # Save conversation
     save_conversation(
         contract_id=contract_id,
         user_message=message,
@@ -41,17 +44,40 @@ def chat(contract_id: int, message: str):
         flags=flags
     )
 
-    # 7. Return only chatbot reply
     return {"reply": reply}
 
-from app.services.chat_persistence import get_chat_history
+
+# HISTORY ENDPOINT (for frontend)
+@router.get("/history")
+def history(contract_id: int):
+    return get_chat_history(contract_id)
+
+from sqlalchemy import text
+from app.database import SessionLocal
 
 @router.get("/history")
-def chat_history(contract_id: int):
-    messages = get_chat_history(contract_id)
+def get_chat_history(contract_id: int):
 
-    return {
-        "contract_id": contract_id,
-        "messages": messages
-    }
+    db = SessionLocal()
 
+    rows = db.execute(
+        text("""
+            SELECT user_message, bot_reply
+            FROM chat_logs
+            WHERE contract_id = :id
+            ORDER BY created_at ASC
+        """),
+        {"id": contract_id}
+    ).fetchall()
+
+    db.close()
+
+    history = []
+
+    for row in rows:
+        history.append({
+            "user": row[0],
+            "assistant": row[1]
+        })
+
+    return history

@@ -88,3 +88,30 @@ def get_chat_history(contract_id: int):
 
     return messages
 
+def get_chat_history(contract_id):
+    db = SessionLocal()
+
+    rows = db.execute(
+        text("""
+            SELECT user_message, bot_reply, created_at
+            FROM chat_logs
+            WHERE contract_id=:id
+            ORDER BY created_at ASC
+        """),
+        {"id": contract_id}
+    ).fetchall()
+
+    db.close()
+
+    history = []
+
+    for u, b, t in rows:
+        history.append({
+            "user": u,
+            "assistant": b,
+            "time": t
+        })
+
+    return history
+
+

@@ -1,8 +1,12 @@
 import streamlit as st
-import requests
-import json
 
-API_URL = "http://127.0.0.1:8000"
+from components.upload import render_upload
+from components.chat import render_chat
+from components.contract_view import render_contract_view
+from components.vehicle_view import render_vehicle_view
+
+
+# ---------------- PAGE CONFIG ----------------
 
 st.set_page_config(
     page_title="ContractClarity AI",
@@ -10,123 +14,97 @@ st.set_page_config(
     layout="wide"
 )
 
-# Session state
+
+# ---------------- SESSION STATE INIT ----------------
+
 if "contract_id" not in st.session_state:
     st.session_state.contract_id = None
+
+if "contract_filename" not in st.session_state:
+    st.session_state.contract_filename = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Sidebar
-st.sidebar.title("🚗 ContractClarity")
+
+# ---------------- SIDEBAR ----------------
+
+st.sidebar.title("🚗 ContractClarity AI")
+
 page = st.sidebar.radio(
     "Navigation",
-    ["Upload Contract", "Negotiate"]
+    [
+        "Upload Contract",
+        "Negotiate"
+    ]
 )
 
-# =====================
-# Upload page
-# =====================
+
+# ---------------- ACTIVE CONTRACT BANNER ----------------
+
+if st.session_state.contract_filename:
+
+    st.success(
+        f"📄 Active Contract: "
+        f"{st.session_state.contract_filename} "
+        f"(ID: {st.session_state.contract_id})"
+    )
+
+
+# ---------------- UPLOAD PAGE ----------------
 
 if page == "Upload Contract":
 
     st.title("Upload Contract")
 
-    uploaded_file = st.file_uploader(
-        "Upload lease contract",
-        type=["pdf"]
-    )
-
-    if uploaded_file:
-
-        if st.button("Analyze Contract"):
-
-            files = {
-                "file": (
-                    uploaded_file.name,
-                    uploaded_file,
-                    "application/pdf"
-                )
-            }
-
-            response = requests.post(
-                f"{API_URL}/upload",
-                files=files
-            )
-
-            if response.status_code == 200:
-
-                data = response.json()
-
-                st.session_state.contract_id = data["contract_id"]
-
-                st.success(
-                    f"Contract analyzed! ID: {data['contract_id']}"
-                )
-
-                st.json(json.loads(data["analysis"]))
-
-            else:
-                st.error("Upload failed")
+    render_upload()
 
 
-# =====================
-# Chat page
-# =====================
+# ---------------- NEGOTIATE PAGE ----------------
 
 elif page == "Negotiate":
 
-    st.title("AI Negotiation Assistant")
+    contract_id = st.session_state.contract_id
 
-    if not st.session_state.contract_id:
-        st.warning("Upload contract first")
+    if not contract_id:
+
+        st.warning("Please upload and analyze a contract first.")
+
+        st.info(
+            "Go to 'Upload Contract' from sidebar to begin."
+        )
+
         st.stop()
 
-    # Display messages
-    for msg in st.session_state.messages:
 
-        if msg["role"] == "user":
-            st.chat_message("user").write(msg["content"])
+    st.title("Contract Intelligence Dashboard")
 
-        else:
-            st.chat_message("assistant").write(msg["content"])
 
-    # Input
-    user_input = st.chat_input(
-        "Ask negotiation questions..."
-    )
+    # -------- Tabs Layout --------
 
-    if user_input:
+    tab1, tab2, tab3 = st.tabs([
+        "📄 Contract Intelligence",
+        "🚘 VIN Details",
+        "💬 AI Negotiation Assistant"
+    ])
 
-        # Add user message
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_input
-        })
 
-        st.chat_message("user").write(user_input)
+    # -------- Contract View --------
 
-        # Call backend
-        with st.spinner("Thinking..."):
+    with tab1:
 
-            response = requests.post(
-                f"{API_URL}/chat",
-                params={
-                    "contract_id": st.session_state.contract_id,
-                    "message": user_input
-                }
-            )
+        render_contract_view(contract_id)
 
-            if response.status_code == 200:
 
-                reply = response.json()["reply"]
+    # -------- Vehicle View --------
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": reply
-                })
+    with tab2:
 
-                st.chat_message("assistant").write(reply)
+        render_vehicle_view(contract_id)
 
-            else:
-                st.error("Chat failed")
+
+    # -------- Chat View --------
+
+    with tab3:
+
+        render_chat(contract_id)

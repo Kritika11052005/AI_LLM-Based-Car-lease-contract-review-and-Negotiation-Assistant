@@ -3,7 +3,6 @@ from app.services.llm_client import call_llm
 
 
 def extract_sla(text: str):
-    text = text[:8000]
 
     PROMPT = f"""
 You are a contract data extraction engine.
@@ -33,6 +32,7 @@ Number rules:
 - "2.9%" → 2.9
 - "₹10,500" → 10500
 - If not present → null
+- Convert months to numbers, e.g. "36 months" → 36
 
 Return STRICT JSON with EXACT keys:
 
