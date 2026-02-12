@@ -1,4 +1,6 @@
+import { DashboardSidebar } from "@/components/dashboard/SideBar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Sidebar } from "lucide-react";
 
 export default function Home() {
   return (
@@ -22,6 +24,9 @@ export default function Home() {
           </div>
           <div className="p-4 bg-secondary text-secondary-foreground rounded-lg">
             <p>Secondary Color</p>
+          </div>
+          <div className="p-4 bg-secondary text-secondary-foreground rounded-lg">
+            <DashboardSidebar />
           </div>
         </div>
       </div>
