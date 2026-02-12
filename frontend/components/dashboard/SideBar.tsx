@@ -1,268 +1,212 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard,
   Upload,
   FileText,
   MessageSquare,
-  History,
   GitCompare,
   Settings,
-  FileCheck,
-  ChevronLeft,
+  LogOut,
+  Menu,
+  X,
+  User,
   ChevronRight,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import StaggeredMenu from '../StaggeredMenu';
+} from "lucide-react";
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Upload Contract', href: '/dashboard/upload', icon: Upload },
-  { name: 'Contracts', href: '/dashboard/contracts', icon: FileText },
-  { name: 'Negotiation', href: '/dashboard/negotiation', icon: MessageSquare },
-  { name: 'History', href: '/dashboard/history', icon: History },
-  { name: 'Comparison', href: '/dashboard/comparison', icon: GitCompare },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Upload Contract", href: "/dashboard/upload", icon: Upload },
+  { name: "My Contracts", href: "/dashboard/contracts", icon: FileText },
+  { name: "Negotiate", href: "/dashboard/negotiate", icon: MessageSquare },
+  { name: "Compare Offers", href: "/dashboard/compare", icon: GitCompare },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
-interface DashboardSidebarProps {
-  className?: string;
-}
-
-export function DashboardSidebar({ className }: DashboardSidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const { user, logout } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Detect mobile viewport
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth < 768) {
-        setIsCollapsed(true);
-      }
-    };
+  const toggleSidebar = () => setIsOpen(!isOpen);
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // For mobile: use StaggeredMenu
-  const menuItems = navigation.map((item) => ({
-    label: item.name,
-    ariaLabel: `Navigate to ${item.name}`,
-    link: item.href,
-  }));
-
-  if (isMobile) {
-    return (
-      <div className="fixed top-0 left-0 right-0 z-50 md:hidden">
-        <StaggeredMenu
-                position="right"
-                items={menuItems}
-                displaySocials={false}
-                displayItemNumbering={true}
-                menuButtonColor="#E5E7EB"
-                openMenuButtonColor="#fff"
-                changeMenuColorOnOpen={true}
-                colors={['#2563EB', '#00D4A8']}
-                logoUrl="/logo.svg"
-                accentColor="#2563EB"
-                onMenuOpen={() => setIsMobileMenuOpen(true)}
-                onMenuClose={() => setIsMobileMenuOpen(false)} isFixed={false}        />
-        
-        {/* Mobile header logo */}
-        <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-cyan rounded-lg flex items-center justify-center">
-            <FileCheck className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-xl font-bold gradient-text">CarLease AI</span>
-        </div>
-      </div>
-    );
-  }
-
-  // For desktop: collapsible sidebar
   return (
-    <motion.aside
-      initial={false}
-      animate={{
-        width: isCollapsed ? '80px' : '256px',
-      }}
-      transition={{
-        duration: 0.3,
-        ease: [0.4, 0, 0.2, 1], // Smooth easing
-      }}
-      className={cn(
-        'relative bg-ocean-900/95 backdrop-blur-xl border-r border-white/10 flex flex-col',
-        'hidden md:flex',
-        className
-      )}
-    >
-      {/* Logo Section */}
-      <div className="h-20 flex items-center justify-center border-b border-white/10 px-4">
-        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-cyan rounded-lg flex items-center justify-center flex-shrink-0">
-            <FileCheck className="w-6 h-6 text-white" />
-          </div>
-          <motion.span
-            initial={false}
-            animate={{
-              opacity: isCollapsed ? 0 : 1,
-              width: isCollapsed ? 0 : 'auto',
-            }}
-            transition={{
-              duration: 0.2,
-              ease: 'easeInOut',
-            }}
-            className="text-xl font-bold gradient-text whitespace-nowrap"
-            style={{ overflow: 'hidden' }}
-          >
-            CarLease AI
-          </motion.span>
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 py-6 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'mx-3 flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative',
-                'hover:bg-white/5',
-                isActive
-                  ? 'bg-primary/20 text-primary'
-                  : 'text-gray-400 hover:text-white'
-              )}
-              title={isCollapsed ? item.name : undefined}
-            >
-              {/* Active indicator bar */}
-              {isActive && (
-                <motion.div
-                  layoutId="sidebar-active"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                />
-              )}
-              
-              {/* Icon */}
-              <div className={cn(
-                'w-5 h-5 flex-shrink-0 flex items-center justify-center',
-                isCollapsed && 'mx-auto'
-              )}>
-                <item.icon className={cn(
-                  'w-5 h-5 transition-all duration-200',
-                  isActive && 'text-primary',
-                  'group-hover:scale-110'
-                )} />
-              </div>
-              
-              {/* Label */}
-              <motion.span
-                initial={false}
-                animate={{
-                  opacity: isCollapsed ? 0 : 1,
-                  width: isCollapsed ? 0 : 'auto',
-                  marginLeft: isCollapsed ? 0 : 12,
-                }}
-                transition={{
-                  duration: 0.2,
-                  ease: 'easeInOut',
-                }}
-                className="font-medium whitespace-nowrap text-sm"
-                style={{ overflow: 'hidden' }}
-              >
-                {item.name}
-              </motion.span>
-
-              {/* Tooltip for collapsed state */}
-              {isCollapsed && (
-                <div className="absolute left-full ml-6 px-3 py-2 bg-ocean-700 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl border border-white/10">
-                  {item.name}
-                  <div className="absolute left-0 top-1/2 -translate-x-1.5 -translate-y-1/2 w-3 h-3 bg-ocean-700 border-l border-t border-white/10 rotate-45" />
-                </div>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Upgrade Section */}
-      <div className="p-3 border-t border-white/10">
-        <motion.div
-          initial={false}
-          animate={{
-            height: isCollapsed ? '60px' : 'auto',
-          }}
-          transition={{
-            duration: 0.3,
-            ease: 'easeInOut',
-          }}
-          className="bg-ocean-800/80 backdrop-blur-sm rounded-lg border border-white/5 overflow-hidden"
-        >
-          {!isCollapsed ? (
-            <div className="p-4">
-              <div className="text-sm font-medium mb-1">Free Plan</div>
-              <div className="text-xs text-gray-400 mb-3">3 of 5 contracts used</div>
-              <div className="w-full bg-ocean-700 rounded-full h-2 mb-3 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: '60%' }}
-                  transition={{ duration: 0.5, delay: 0.2 }}
-                  className="h-full bg-gradient-to-r from-primary to-cyan rounded-full"
-                />
-              </div>
-              <Link href="/upgrade">
-                <button className="w-full btn-gradient text-sm py-2 rounded-md hover:scale-105 transition-transform">
-                  Upgrade to Pro
-                </button>
-              </Link>
-            </div>
-          ) : (
-            <div className="p-3 flex justify-center items-center h-full">
-              <Link href="/upgrade">
-                <button 
-                  className="w-12 h-12 btn-gradient rounded-lg flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
-                  title="Upgrade to Pro"
-                >
-                  <div className="text-xs font-bold">PRO</div>
-                </button>
-              </Link>
-            </div>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Collapse Toggle Button */}
+    <>
+      {/* Hamburger Menu Button - Enhanced Visibility */}
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className={cn(
-          'absolute top-20 w-6 h-6 bg-ocean-700 border border-white/10 rounded-full',
-          'flex items-center justify-center hover:bg-ocean-600 transition-all',
-          'hover:scale-110 shadow-lg z-20',
-          'focus:outline-none focus:ring-2 focus:ring-primary',
-          isCollapsed ? '-right-3' : '-right-3'
-        )}
-        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onClick={toggleSidebar}
+        className="fixed top-6 left-6 z-[60] w-12 h-12 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-[#B19EEF]/20 to-[#5227FF]/20 backdrop-blur-md border border-[#B19EEF]/30 hover:border-[#B19EEF]/60 transition-all duration-300 group shadow-lg hover:shadow-[#B19EEF]/30"
+        aria-label="Toggle menu"
       >
-        <motion.div
-          initial={false}
-          animate={{ rotate: isCollapsed ? 0 : 180 }}
-          transition={{ duration: 0.3 }}
-        >
-          <ChevronLeft className="w-4 h-4 text-gray-400" />
-        </motion.div>
+        <span
+          className={cn(
+            "w-6 h-0.5 bg-white transition-all duration-300 group-hover:bg-[#B19EEF]",
+            isOpen && "rotate-45 translate-y-2 bg-[#B19EEF]"
+          )}
+        />
+        <span
+          className={cn(
+            "w-6 h-0.5 bg-white transition-all duration-300 group-hover:bg-[#B19EEF]",
+            isOpen && "opacity-0"
+          )}
+        />
+        <span
+          className={cn(
+            "w-6 h-0.5 bg-white transition-all duration-300 group-hover:bg-[#B19EEF]",
+            isOpen && "-rotate-45 -translate-y-2 bg-[#B19EEF]"
+          )}
+        />
       </button>
-    </motion.aside>
+
+      {/* Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300"
+          onClick={toggleSidebar}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed top-0 right-0 h-screen w-80 z-50 transition-transform duration-500 ease-in-out",
+          "bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f1419]",
+          "dark:from-[#0a0e1a] dark:via-[#0f1419] dark:to-[#000000]",
+          "border-l border-[#B19EEF]/20",
+          isOpen ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        <div className="flex flex-col h-full p-8">
+          {/* Logo */}
+          <div className="mb-12 animate-fade-in">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-[#B19EEF] to-[#5227FF] bg-clip-text text-transparent">
+              AI Lease
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">Negotiation Assistant</p>
+          </div>
+
+          {/* User Info */}
+          <div
+            className="flex items-center gap-3 mb-8 p-3 rounded-lg bg-white/5 border border-[#B19EEF]/20"
+            style={{ animationDelay: "100ms" }}
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#B19EEF] to-[#5227FF] flex items-center justify-center">
+              <User size={20} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
+                {user?.fullName || "User"}
+              </p>
+              <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 space-y-2">
+            {navigation.map((item, index) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={toggleSidebar}
+                  className={cn(
+                    "group flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-300",
+                    "hover:bg-white/10 hover:translate-x-2",
+                    isActive && "bg-gradient-to-r from-[#B19EEF]/20 to-[#5227FF]/20 border-l-2 border-[#5227FF]"
+                  )}
+                  style={{
+                    animation: isOpen ? `slideIn 0.3s ease-out ${index * 50}ms both` : "none",
+                  }}
+                >
+                  <div className="relative">
+                    <span className="absolute -left-6 text-xs text-[#B19EEF] font-mono opacity-50">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <Icon
+                      size={20}
+                      className={cn(
+                        "transition-colors",
+                        isActive ? "text-[#5227FF]" : "text-gray-400 group-hover:text-[#B19EEF]"
+                      )}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-sm font-medium transition-colors",
+                      isActive ? "text-white" : "text-gray-300 group-hover:text-white"
+                    )}
+                  >
+                    {item.name}
+                  </span>
+                  {isActive && (
+                    <ChevronRight size={16} className="ml-auto text-[#5227FF]" />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Bottom Section */}
+          <div className="space-y-4 pt-6 border-t border-[#B19EEF]/20">
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-between px-4 py-2">
+              <span className="text-sm text-gray-400">Theme</span>
+              <ThemeToggle />
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={() => {
+                logout();
+                toggleSidebar();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 hover:bg-red-500/10 hover:translate-x-2 group"
+            >
+              <LogOut size={20} className="text-red-400 group-hover:text-red-300" />
+              <span className="text-sm font-medium text-red-400 group-hover:text-red-300">
+                Logout
+              </span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out;
+        }
+      `}</style>
+    </>
   );
 }

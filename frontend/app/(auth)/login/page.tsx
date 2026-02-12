@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -11,7 +10,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoginLoading } = useAuth();
-  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,123 +17,88 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-background">
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-[#0a0e1a]">
       {/* Background Video */}
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="absolute inset-0 w-full h-full object-cover opacity-30 dark:opacity-20"
+        className="absolute inset-0 w-full h-full object-cover opacity-20"
       >
         <source src="/videos/auth-bg.mp4" type="video/mp4" />
       </video>
 
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/60 to-background/80 backdrop-blur-sm" />
+      {/* Dark Overlay - Same as signup page */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0a0e1a]/80 via-[#0f1419]/60 to-[#0a0e1a]/80 backdrop-blur-sm" />
 
-      {/* Login Container with Animated Circle */}
-      <div className="relative z-10 container-wrapper">
-        {/* Animated Circle Bars */}
-        <div className="circle-container">
-          {Array.from({ length: 50 }).map((_, i) => (
-            <span
-              key={i}
-              className="circle-bar"
-              style={{ "--i": i } as React.CSSProperties}
-            />
-          ))}
-        </div>
+      {/* Container */}
+      <div className="login-container">
+        {/* Animated Bars */}
+        {Array.from({ length: 50 }).map((_, i) => (
+          <span
+            key={i}
+            className="circle-span"
+            style={{ "--i": i } as React.CSSProperties}
+          />
+        ))}
 
-        {/* Login Form */}
+        {/* Login Box */}
         <div className="login-box">
-          <h2 className="text-3xl font-bold text-[#0ef] dark:text-[#0ef] text-center mb-8">
-            Login
-          </h2>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Input */}
+          <h2>Login</h2>
+          <form onSubmit={handleSubmit}>
             <div className="input-box">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="auth-input"
               />
-              <label className="auth-label">Email</label>
+              <label>Email</label>
             </div>
-
-            {/* Password Input */}
             <div className="input-box">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="auth-input pr-12"
               />
-              <label className="auth-label">Password</label>
+              <label>Password</label>
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#0ef] transition-colors"
+                className="eye-button"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-
-            {/* Forgot Password */}
             <div className="forgot-pass">
-              <Link
-                href="/forgot-password"
-                className="text-sm text-gray-300 dark:text-gray-400 hover:text-[#0ef] transition-colors"
-              >
-                Forgot your password?
-              </Link>
+              <Link href="/forgot-password">Forgot your password?</Link>
             </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoginLoading}
-              className="auth-btn w-full h-12 bg-[#0ef] hover:bg-[#0ef]/90 text-[#1f293a] dark:text-[#0a0e1a] font-semibold rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button className="btn" type="submit" disabled={isLoginLoading}>
               {isLoginLoading ? "Logging in..." : "Login"}
             </button>
-
-            {/* Signup Link */}
-            <div className="signup-link text-center">
-              <Link
-                href="/signup"
-                className="text-[#0ef] hover:text-[#0ef]/80 font-semibold transition-colors"
-              >
-                Sign Up
-              </Link>
+            <div className="signup-link">
+              <Link href="/signup">Sign Up</Link>
             </div>
           </form>
         </div>
       </div>
 
       <style jsx>{`
-        .container-wrapper {
+        .login-container {
           position: relative;
           width: 400px;
           height: 400px;
           display: flex;
           justify-content: center;
           align-items: center;
-        }
-
-        .circle-container {
-          position: absolute;
-          width: 100%;
-          height: 100%;
           border-radius: 50%;
           overflow: hidden;
+          z-index: 10;
         }
 
-        .circle-bar {
+        .circle-span {
           position: absolute;
           left: 0;
           width: 32px;
@@ -158,12 +121,24 @@ export default function LoginPage() {
         }
 
         .login-box {
-          position: relative;
+          position: absolute;
           width: 80%;
           max-width: 300px;
-          z-index: 10;
+          z-index: 1;
           padding: 20px;
           border-radius: 20px;
+        }
+
+        .login-box form {
+          width: 100%;
+          padding: 0 10px;
+        }
+
+        .login-box h2 {
+          font-size: 1.8em;
+          color: #0ef;
+          text-align: center;
+          margin-bottom: 10px;
         }
 
         .input-box {
@@ -171,7 +146,7 @@ export default function LoginPage() {
           margin: 15px 0;
         }
 
-        .auth-input {
+        .input-box input {
           width: 100%;
           height: 45px;
           background: transparent;
@@ -184,25 +159,20 @@ export default function LoginPage() {
           transition: 0.5s ease;
         }
 
-        .auth-input:focus {
+        .input-box input:focus {
           border-color: #0ef;
         }
 
-        .auth-input:not(:placeholder-shown) ~ .auth-label,
-        .auth-input:focus ~ .auth-label {
+        .input-box input:valid ~ label,
+        .input-box input:focus ~ label {
           top: -10px;
           font-size: 0.8em;
-          background: #1f293a;
+          background: #0a0e1a;
           padding: 0 6px;
           color: #0ef;
         }
 
-        :global(.dark) .auth-input:not(:placeholder-shown) ~ .auth-label,
-        :global(.dark) .auth-input:focus ~ .auth-label {
-          background: #0a0e1a;
-        }
-
-        .auth-label {
+        .input-box label {
           position: absolute;
           top: 50%;
           left: 15px;
@@ -213,36 +183,78 @@ export default function LoginPage() {
           color: #fff;
         }
 
-        /* Light theme adjustments */
-        :global(.light) .auth-input {
+        .eye-button {
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          color: #fff;
+          cursor: pointer;
+          z-index: 10;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          transition: 0.3s;
+        }
+
+        .eye-button:hover {
+          color: #0ef;
+        }
+
+        .forgot-pass {
+          margin: -10px 0 10px;
+          text-align: center;
+        }
+
+        .forgot-pass a {
+          font-size: 0.85em;
+          color: #fff;
+          text-decoration: none;
+        }
+
+        .forgot-pass a:hover {
+          color: #0ef;
+        }
+
+        .btn {
+          width: 100%;
+          height: 45px;
+          background: #0ef;
+          border: none;
+          outline: none;
+          border-radius: 40px;
+          cursor: pointer;
+          font-size: 1em;
           color: #1f293a;
-          border-color: #4a5568;
+          font-weight: 600;
+          transition: 0.3s;
         }
 
-        :global(.light) .auth-label {
-          color: #4a5568;
+        .btn:hover:not(:disabled) {
+          background: #00d4d4;
         }
 
-        :global(.light) .auth-input:focus {
-          border-color: #0ef;
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
-        :global(.light) .circle-bar {
-          background: #cbd5e0;
+        .signup-link {
+          margin: 10px 0;
+          text-align: center;
         }
 
-        @keyframes blinkLight {
-          0% {
-            background: #0ea5e9;
-          }
-          25% {
-            background: #cbd5e0;
-          }
+        .signup-link a {
+          font-size: 1em;
+          color: #0ef;
+          text-decoration: none;
+          font-weight: 600;
         }
 
-        :global(.light) .circle-bar {
-          animation: blinkLight 3s linear infinite;
-          animation-delay: calc(var(--i) * (3s / 50));
+        .signup-link a:hover {
+          color: #00d4d4;
         }
       `}</style>
     </div>
