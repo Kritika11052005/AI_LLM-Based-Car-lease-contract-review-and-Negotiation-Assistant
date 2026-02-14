@@ -292,3 +292,9 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
 }
+export interface AskQuestionResponse {
+  contract_id: string;
+  thread_id: string;
+  question: string;
+  answer: string;
+}

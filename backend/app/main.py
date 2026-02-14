@@ -13,7 +13,7 @@ app = FastAPI(title="Car Contract Analysis API")
 @app.on_event("startup")
 async def startup():
     """
-    Attempt to connect to the database on startup.
+   Attempt to connect to the database on startup.
     If the Prisma engine cannot reach the database (e.g. Neon URL down or
     network issue), log the error but allow the API process to start so that
     non‑DB endpoints can still function.
@@ -29,15 +29,16 @@ async def shutdown():
     try:
         await db.disconnect()
     except Exception:
-        # Best-effort disconnect; ignore errors on shutdown
+         #Best-effort disconnect; ignore errors on shutdown
         pass
 
 
 app.include_router(upload_router, prefix="/api")
-#app.include_router(vin_router, prefix="/api")
+app.include_router(vin_router, prefix="/api")
 app.include_router(negotiation_router, prefix="/api/negotiation")  # ← Added /negotiation prefix
 
 
 @app.get("/")
 def root():
     return {"status": "Backend running"}
+

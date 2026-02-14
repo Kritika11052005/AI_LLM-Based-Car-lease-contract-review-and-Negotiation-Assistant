@@ -2,17 +2,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { UseMutationResult } from "@tanstack/react-query";
-import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MessageBubble } from "./MessageBubble";
 import { Send, Loader2 } from "lucide-react";
-import { NegotiationMessage, AskQuestionResponse } from "@/types";
-import { Skeleton } from "@/components/ui/skeleton";
-import { API_ENDPOINTS } from "@/lib/constants";
+import { AskQuestionResponse } from "@/types";
+import { type UseMutationResult } from "@tanstack/react-query";
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+}
 
 interface ChatInterfaceProps {
   contractId: string;
@@ -20,10 +22,11 @@ interface ChatInterfaceProps {
   setThreadId: (id: string) => void;
   tone: string;
   askQuestionMutation: UseMutationResult<
-    AskQuestionResponse,
+    any,
     any,
     { question: string; thread_id?: string }
   >;
+  initialMessages?: ChatMessage[];
 }
 
 export function ChatInterface({
@@ -32,22 +35,16 @@ export function ChatInterface({
   setThreadId,
   tone,
   askQuestionMutation,
+  initialMessages = [],
 }: ChatInterfaceProps) {
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages if thread exists
-  const { data: messages, isLoading } = useQuery({
-    queryKey: ["thread", threadId],
-    queryFn: async () => {
-      if (!threadId) return [];
-      const response = await api.get<{ messages: NegotiationMessage[] }>(
-        API_ENDPOINTS.NEGOTIATION.MESSAGES(threadId)
-      );
-      return response.data.messages || [];
-    },
-    enabled: !!threadId,
-  });
+  // Update messages when initial messages change
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -60,15 +57,10 @@ export function ChatInterface({
     const userMessage = message;
     setMessage("");
 
-    const result = await askQuestionMutation.mutateAsync({
+    await askQuestionMutation.mutateAsync({
       question: userMessage,
       thread_id: threadId || undefined,
     });
-
-    // Set thread ID if this is the first message
-    if (!threadId) {
-      setThreadId(result.thread_id);
-    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -79,18 +71,17 @@ export function ChatInterface({
   };
 
   return (
-    <Card className="flex flex-col h-[600px]">
+    <Card className="flex flex-col h-[700px]">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {isLoading ? (
-          <ChatSkeleton />
-        ) : messages && messages.length > 0 ? (
+        {messages.length > 0 ? (
           messages.map((msg) => (
             <MessageBubble
               key={msg.id}
-              message={msg.body}
-              isUser={msg.senderRole === "user"}
-              timestamp={msg.sentAt}
+              message={msg.content}
+              isUser={msg.role === "user"}
+              isSystem={msg.role === "system"}
+              timestamp={msg.timestamp}
             />
           ))
         ) : (
@@ -98,45 +89,9 @@ export function ChatInterface({
             <div className="text-6xl">💬</div>
             <h3 className="text-xl font-semibold">Start Your Negotiation</h3>
             <p className="text-muted-foreground max-w-md">
-              Ask me anything about your contract or click &quot;Generate Script&quot; to
-              get a complete negotiation strategy.
+              Upload a contract to get AI-powered negotiation strategies and
+              personalized advice.
             </p>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setMessage("What are the main red flags in this contract?")
-                }
-              >
-                Show red flags
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setMessage("How can I negotiate a better monthly payment?")
-                }
-              >
-                Lower payment
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMessage("Is the APR rate fair?")}
-              >
-                Check APR
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setMessage("What should I ask the dealer?")
-                }
-              >
-                Dealer questions
-              </Button>
-            </div>
           </div>
         )}
 
@@ -184,17 +139,5 @@ export function ChatInterface({
         </p>
       </div>
     </Card>
-  );
-}
-
-function ChatSkeleton() {
-  return (
-    <div className="space-y-4">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : ""}`}>
-          <Skeleton className={`h-20 ${i % 2 === 0 ? "w-3/4" : "w-2/3"}`} />
-        </div>
-      ))}
-    </div>
   );
 }

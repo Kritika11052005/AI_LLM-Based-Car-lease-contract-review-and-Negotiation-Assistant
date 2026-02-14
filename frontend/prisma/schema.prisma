@@ -2,10 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-py"
-  output   = "../app/generated/prisma"
-  recursive_type_depth = -1
-  enable_experimental_decimal = true
+  provider = "prisma-client-js"
 }
 
 datasource db {

@@ -5,14 +5,21 @@ import { formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface MessageBubbleProps {
   message: string;
   isUser: boolean;
+  isSystem?: boolean;
   timestamp: string;
 }
 
-export function MessageBubble({ message, isUser, timestamp }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isUser,
+  isSystem = false,
+  timestamp,
+}: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -22,46 +29,53 @@ export function MessageBubble({ message, isUser, timestamp }: MessageBubbleProps
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (isSystem) {
+    return (
+      <div className="w-full">
+        <div className="rounded-lg p-4 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+            {message}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+    <div className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
       {/* Avatar */}
       <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
           isUser
             ? "bg-primary text-primary-foreground"
             : "bg-secondary text-secondary-foreground"
-        }`}
+        )}
       >
         <span className="text-xs font-bold">{isUser ? "You" : "AI"}</span>
       </div>
 
       {/* Message */}
-      <div
-        className={`flex-1 group ${
-          isUser ? "flex flex-col items-end" : ""
-        }`}
-      >
+      <div className={cn("flex-1 group", isUser && "flex flex-col items-end")}>
         <div
-          className={`rounded-lg p-4 max-w-[80%] ${
+          className={cn(
+            "rounded-lg p-4 max-w-[80%]",
             isUser
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-foreground"
-          }`}
+          )}
         >
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            {message.split("\n").map((line, i) => (
-              <p key={i} className="mb-2 last:mb-0">
-                {line}
-              </p>
-            ))}
+          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+            {message}
           </div>
         </div>
 
         {/* Timestamp & Actions */}
         <div
-          className={`flex items-center gap-2 mt-1 text-xs text-muted-foreground ${
-            isUser ? "flex-row-reverse" : ""
-          }`}
+          className={cn(
+            "flex items-center gap-2 mt-1 text-xs text-muted-foreground",
+            isUser && "flex-row-reverse"
+          )}
         >
           <span>{formatDateTime(timestamp)}</span>
           <Button

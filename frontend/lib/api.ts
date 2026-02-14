@@ -4,52 +4,51 @@ import Cookies from "js-cookie";
 import { APIError } from "@/types";
 
 /**
- * Axios instance with base configuration
+ * Axios instance for BACKEND (Python FastAPI - port 8000)
+ * Used for: Contracts, VIN lookup, Negotiation
  */
-const api: AxiosInstance = axios.create({
+export const backendAPI: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000",
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000, // 30 seconds
+  timeout: 30000,
 });
 
 /**
- * Request interceptor - Attach JWT token to all requests
+ * Axios instance for FRONTEND (Next.js API routes - port 3000)
+ * Used for: Authentication
  */
-api.interceptors.request.use(
+export const frontendAPI: AxiosInstance = axios.create({
+  baseURL: "/api", // Relative URL - calls Next.js API routes
+  headers: {
+    "Content-Type": "application/json",
+  },
+  timeout: 10000,
+});
+
+// Add interceptors to backendAPI
+backendAPI.interceptors.request.use(
   (config) => {
     const token = Cookies.get("access_token");
-    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-/**
- * Response interceptor - Handle errors globally
- */
-api.interceptors.response.use(
+backendAPI.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<APIError>) => {
-    // Handle 401 Unauthorized - Token expired
     if (error.response?.status === 401) {
-      // Clear token
       Cookies.remove("access_token");
-      
-      // Redirect to login (only on client side)
       if (typeof window !== "undefined") {
         window.location.href = "/login";
       }
     }
     
-    // Handle network errors
     if (!error.response) {
       return Promise.reject({
         detail: "Network error. Please check your connection.",
@@ -57,7 +56,24 @@ api.interceptors.response.use(
       });
     }
     
-    // Return formatted error
+    return Promise.reject({
+      detail: error.response.data?.detail || "An error occurred",
+      status: error.response.status,
+    });
+  }
+);
+
+// Add interceptors to frontendAPI (for auth)
+frontendAPI.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError<APIError>) => {
+    if (!error.response) {
+      return Promise.reject({
+        detail: "Network error. Please check your connection.",
+        status: 0,
+      });
+    }
+    
     return Promise.reject({
       detail: error.response.data?.detail || "An error occurred",
       status: error.response.status,
@@ -66,7 +82,7 @@ api.interceptors.response.use(
 );
 
 /**
- * Upload file with progress tracking
+ * Upload file with progress tracking (to backend)
  */
 export const uploadFile = async (
   url: string,
@@ -90,7 +106,7 @@ export const uploadFile = async (
     },
   };
   
-  const response = await api.post(url, formData, config);
+  const response = await backendAPI.post(url, formData, config);
   return response.data;
 };
 
@@ -104,4 +120,5 @@ export const handleAPIError = (error: unknown): string => {
   return "An unexpected error occurred";
 };
 
-export default api;
+// Default export is backend API for backward compatibility
+export default backendAPI;

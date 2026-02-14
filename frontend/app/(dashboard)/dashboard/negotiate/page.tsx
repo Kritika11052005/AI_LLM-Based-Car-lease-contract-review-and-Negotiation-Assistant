@@ -1,451 +1,501 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { JSX, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { uploadFile } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ChatInterface } from "@/components/chat/ChatInterface";
-import { ToneSelector } from "@/components/chat/ToneSelector";
-import { EmailGenerator } from "@/components/chat/EmailGenerator";
-import { FairnessGauge } from "@/components/dashboard/FairnessGauge";
-import { SLADisplay } from "@/components/contract/SLADsiplay";
+import { Badge } from "@/components/ui/badge";
 import {
   Upload,
-  FileText,
+  Send,
   Loader2,
   Sparkles,
-  X,
-  CheckCircle,
+  AlertTriangle,
+  TrendingUp,
+  MessageSquare,
+  Plus,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
 import { UPLOAD_CONFIG } from "@/lib/constants";
+import { formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-type Step = "upload" | "processing" | "chat";
+interface ChatMessage {
+  id: string;
+  type: "text" | "upload" | "analysis" | "script" | "user";
+  content: string;
+  data?: any;
+  timestamp: string;
+}
 
-export default function NegotiatePage(): JSX.Element {
-  const router = useRouter();
-  const [step, setStep] = useState<Step>("upload");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+interface Conversation {
+  id: string;
+  title: string;
+  lastMessage: string;
+  timestamp: string;
+}
+
+export default function NegotiatePage() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "greeting",
+      type: "text",
+      content: `👋 Hi! I'm your AI Lease Negotiation Assistant.
+
+I can help you:
+- Analyze your car lease/loan contracts
+- Identify red flags and unfair terms
+- Calculate fairness scores
+- Generate personalized negotiation scripts
+- Answer questions about your contract
+
+To get started, upload your contract below!`,
+      timestamp: new Date().toISOString(),
+    },
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [contractId, setContractId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [contractData, setContractData] = useState<any>(null);
-  const [analysisData, setAnalysisData] = useState<any>(null);
-  const [tone, setTone] = useState<"professional" | "friendly" | "assertive">(
-    "professional"
-  );
-  const [processingStage, setProcessingStage] = useState<string>("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Upload mutation
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Upload & process contract
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      setProcessingStage("Uploading contract...");
-      const response = await uploadFile(
-        API_ENDPOINTS.CONTRACTS.UPLOAD,
-        file,
-        setUploadProgress
-      );
+      const response = await uploadFile(API_ENDPOINTS.CONTRACTS.UPLOAD, file, () => {});
       return response;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setContractId(data.contract_id);
-      extractSLAMutation.mutate(data.contract_id);
+      
+      // Extract SLA
+      const slaResponse = await api.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(data.contract_id));
+      
+      // Analyze
+      const analysisResponse = await api.post(API_ENDPOINTS.NEGOTIATION.ANALYZE(data.contract_id));
+      const analysis = analysisResponse.data;
+
+      // Add analysis cards
+      const analysisMessage: ChatMessage = {
+        id: `analysis-${Date.now()}`,
+        type: "analysis",
+        content: "",
+        data: analysis,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, analysisMessage]);
+
+      // Generate script
+      const scriptResponse = await api.post(API_ENDPOINTS.NEGOTIATION.SCRIPT(data.contract_id));
+      setThreadId(scriptResponse.data.thread_id);
+
+      const scriptMessage: ChatMessage = {
+        id: `script-${Date.now()}`,
+        type: "script",
+        content: scriptResponse.data.negotiation_script,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, scriptMessage]);
+
+      setIsUploading(false);
+      toast.success("Contract analyzed successfully!");
+
+      // Save to conversation history
+      const newConv: Conversation = {
+        id: data.contract_id,
+        title: slaResponse.data.vehicle_data
+          ? `${slaResponse.data.vehicle_data.year} ${slaResponse.data.vehicle_data.make}`
+          : "Contract Analysis",
+        lastMessage: "Analysis complete",
+        timestamp: new Date().toISOString(),
+      };
+      setConversations((prev) => [newConv, ...prev]);
+      setActiveConversationId(data.contract_id);
     },
     onError: (error: any) => {
       toast.error(error.detail || "Upload failed");
-      setStep("upload");
-      setSelectedFile(null);
+      setIsUploading(false);
     },
   });
 
-  // Extract SLA mutation
-  const extractSLAMutation = useMutation({
-    mutationFn: async (contractId: string) => {
-      setProcessingStage("Extracting lease terms with AI...");
-      const response = await api.post(
-        API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId)
-      );
+  // Ask question
+  const askMutation = useMutation({
+    mutationFn: async (question: string) => {
+      const response = await api.post(API_ENDPOINTS.NEGOTIATION.ASK(contractId!), {
+        question,
+        thread_id: threadId,
+      });
       return response.data;
     },
     onSuccess: (data) => {
-      setContractData(data);
-      analyzeMutation.mutate(data.contract_id);
-    },
-    onError: (error: any) => {
-      toast.error(error.detail || "SLA extraction failed");
-      setStep("upload");
+      if (!threadId) setThreadId(data.thread_id);
+
+      const aiMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        type: "text",
+        content: data.answer,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
     },
   });
 
-  // Analyze contract mutation
-  const analyzeMutation = useMutation({
-    mutationFn: async (contractId: string) => {
-      setProcessingStage("Analyzing contract fairness...");
-      const response = await api.post(
-        API_ENDPOINTS.NEGOTIATION.ANALYZE(contractId)
-      );
-      return response.data;
-    },
-    onSuccess: (data) => {
-      setAnalysisData(data);
-      generateScriptMutation.mutate(data.contract_id);
-    },
-    onError: (error: any) => {
-      toast.error(error.detail || "Analysis failed");
-      // Continue to chat even if analysis fails
-      setStep("chat");
-    },
-  });
-
-  // Generate script mutation
-  const generateScriptMutation = useMutation({
-    mutationFn: async (contractId: string) => {
-      setProcessingStage("Generating negotiation strategy...");
-      const response = await api.post(
-        API_ENDPOINTS.NEGOTIATION.SCRIPT(contractId)
-      );
-      return response.data;
-    },
-    onSuccess: (data) => {
-      setThreadId(data.thread_id);
-      toast.success("Contract processed! Ready to negotiate.");
-      setStep("chat");
-    },
-    onError: (error: any) => {
-      toast.error(error.detail || "Script generation failed");
-      setStep("chat");
-    },
-  });
-
-  // Ask question mutation
-  const askQuestionMutation = useMutation({
-    mutationFn: async (data: { question: string; thread_id?: string }) => {
-      const response = await api.post(
-        API_ENDPOINTS.NEGOTIATION.ASK(contractId!),
-        data
-      );
-      return response.data;
-    },
-    onSuccess: (data) => {
-      if (!threadId) {
-        setThreadId(data.thread_id);
-      }
-    },
-    onError: (error: any) => {
-      toast.error(error.detail || "Question failed");
-    },
-  });
-
-  // Dropzone
-  const onDrop = (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-
+  const handleFileUpload = (file: File) => {
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-      toast.error("File size must be less than 10MB");
+      toast.error("File must be less than 10MB");
       return;
     }
 
-    setSelectedFile(file);
+    setIsUploading(true);
+    const uploadMsg: ChatMessage = {
+      id: `upload-${Date.now()}`,
+      type: "user",
+      content: `📎 Uploaded: ${file.name}`,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, uploadMsg]);
+
+    uploadMutation.mutate(file);
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const onDrop = (files: File[]) => {
+    if (files[0]) handleFileUpload(files[0]);
+  };
+
+  const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     accept: UPLOAD_CONFIG.ACCEPTED_TYPES,
     multiple: false,
-    disabled: step !== "upload",
+    noClick: true,
   });
 
-  const handleUpload = () => {
-    if (!selectedFile) return;
-    setStep("processing");
-    uploadMutation.mutate(selectedFile);
+  const handleSend = () => {
+    if (!inputMessage.trim() || !contractId) return;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: "user",
+      content: inputMessage,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInputMessage("");
+
+    askMutation.mutate(inputMessage);
   };
 
-  const handleReset = () => {
-    setStep("upload");
-    setSelectedFile(null);
-    setUploadProgress(0);
+  const startNewChat = () => {
+    setMessages([
+      {
+        id: "greeting",
+        type: "text",
+        content: `👋 Hi! I'm your AI Lease Negotiation Assistant...`,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
     setContractId(null);
     setThreadId(null);
-    setContractData(null);
-    setAnalysisData(null);
-    setProcessingStage("");
+    setActiveConversationId(null);
   };
 
-  // Render based on step
-  if (step === "upload") {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            AI Negotiation Assistant
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Upload your contract to get personalized negotiation strategies
-          </p>
-        </div>
+  return (
+    <div className="flex h-[calc(100vh-120px)] gap-4">
+      {/* Left Sidebar - Chat History */}
+      <div className="w-64 flex flex-col gap-4">
+        <Button onClick={startNewChat} className="w-full">
+          <Plus className="w-4 h-4 mr-2" />
+          New Chat
+        </Button>
 
-        <Card className="p-8">
-          {!selectedFile ? (
-            <div
-              {...getRootProps()}
-              className={`
-                relative cursor-pointer bg-muted/30 p-12 rounded-[40px] 
-                border-2 border-dashed transition-all duration-300
-                ${
-                  isDragActive
-                    ? "border-primary bg-primary/10 scale-105"
-                    : "border-border hover:border-primary/50 hover:bg-muted/50"
-                }
-              `}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
-                <svg
-                  className="w-16 h-16 fill-muted-foreground"
-                  viewBox="0 0 640 512"
-                >
-                  <path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9c-.1-2.7-.2-5.4-.2-8.1c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C409.9 102 428.3 96 448 96c53 0 96 43 96 96c0 12.2-2.3 23.8-6.4 34.6C596 238.4 640 290.1 640 352c0 70.7-57.3 128-128 128H144zm79-217c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z" />
-                </svg>
-
-                <div className="space-y-2">
-                  <p className="text-lg font-medium">
-                    {isDragActive ? "Drop it here!" : "Drag and Drop"}
-                  </p>
-                  <p className="text-muted-foreground">or</p>
-                  <span className="inline-block px-6 py-2 bg-foreground text-background rounded-lg font-medium hover:opacity-90 transition-opacity">
-                    Browse file
-                  </span>
+        <Card className="flex-1 overflow-y-auto">
+          <div className="p-4 border-b border-border">
+            <h3 className="font-semibold text-sm">Chat History</h3>
+          </div>
+          <div className="divide-y divide-border">
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                onClick={() => setActiveConversationId(conv.id)}
+                className={cn(
+                  "w-full text-left p-4 hover:bg-muted/50 transition-colors",
+                  activeConversationId === conv.id && "bg-muted"
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  <MessageSquare className="w-4 h-4 mt-1 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{conv.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {conv.lastMessage}
+                    </p>
+                  </div>
                 </div>
-
-                <p className="text-sm text-muted-foreground mt-4">
-                  Supported: PDF, PNG, JPG (Max 10MB)
-                </p>
+              </button>
+            ))}
+            {conversations.length === 0 && (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No conversations yet
               </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
-                <FileText className="w-10 h-10 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedFile(null)}
-                  className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-destructive" />
-                </button>
-              </div>
-
-              <div className="flex gap-3">
-                <Button onClick={handleUpload} className="flex-1">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Start Negotiation Analysis
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedFile(null)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Info Cards */}
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <Upload className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">Upload Contract</h3>
-                <p className="text-sm text-muted-foreground">
-                  Upload your lease/loan contract
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-secondary/10 rounded-lg">
-                <Sparkles className="w-6 h-6 text-secondary" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">AI Analysis</h3>
-                <p className="text-sm text-muted-foreground">
-                  Get fairness scores and red flags
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-green-500/10 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">Negotiate</h3>
-                <p className="text-sm text-muted-foreground">
-                  Chat with AI for negotiation tips
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === "processing") {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <Card className="p-12">
-          <div className="space-y-6 text-center">
-            <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Processing Your Contract</h2>
-              <p className="text-muted-foreground">{processingStage}</p>
-            </div>
-
-            <Progress value={uploadProgress} className="h-2" />
-
-            <div className="space-y-3 text-left">
-              <ProcessingStep
-                label="Upload Contract"
-                isComplete={!!contractId}
-                isActive={uploadMutation.isPending}
-              />
-              <ProcessingStep
-                label="Extract Lease Terms"
-                isComplete={!!contractData}
-                isActive={extractSLAMutation.isPending}
-              />
-              <ProcessingStep
-                label="Analyze Fairness"
-                isComplete={!!analysisData}
-                isActive={analyzeMutation.isPending}
-              />
-              <ProcessingStep
-                label="Generate Strategy"
-                isComplete={!!threadId}
-                isActive={generateScriptMutation.isPending}
-              />
-            </div>
+            )}
           </div>
         </Card>
       </div>
-    );
-  }
 
-  // Chat step
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Negotiation Assistant</h1>
-          <p className="text-muted-foreground mt-1">
-            {contractData?.vehicle_data
-              ? `${contractData.vehicle_data.year} ${contractData.vehicle_data.make} ${contractData.vehicle_data.model}`
-              : "Your Contract"}
-          </p>
-        </div>
+      {/* Main Chat Area */}
+      <Card className="flex-1 flex flex-col">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6" {...getRootProps()}>
+          <input {...getInputProps()} />
+          
+          {messages.map((msg) => (
+            <MessageRenderer key={msg.id} message={msg} />
+          ))}
 
-        <div className="flex items-center gap-3">
-          <ToneSelector value={tone} onChange={setTone} />
-          <Button variant="outline" onClick={handleReset}>
-            <Upload className="w-4 h-4 mr-2" />
-            New Contract
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Chat Area */}
-        <div className="lg:col-span-2 space-y-6">
-          <ChatInterface
-            contractId={contractId!}
-            threadId={threadId}
-            setThreadId={setThreadId}
-            tone={tone}
-            askQuestionMutation={askQuestionMutation}
-          />
-
-          {/* SLA Display */}
-          {contractData?.sla_data && (
-            <SLADisplay
-              sla={contractData.database_saved}
-              contractId={contractId!}
-            />
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Fairness Score */}
-          {analysisData?.fairness_score !== undefined && (
-            <Card className="p-6">
-              <FairnessGauge
-                score={analysisData.fairness_score}
-                rating={analysisData.rating}
+          {/* Upload Prompt (shown after greeting) */}
+          {messages.length === 1 && (
+            <div className="flex justify-center">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+              >
+                <Upload className="w-5 h-5" />
+                Upload Contract
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handleFileUpload(e.target.files[0]);
+                  }
+                }}
               />
-            </Card>
+            </div>
           )}
 
-          {/* Email Generator */}
-          {threadId && (
-            <EmailGenerator contractId={contractId!} threadId={threadId} />
+          {/* Loading */}
+          {isUploading && (
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <div className="flex-1">
+                <p className="font-medium">Processing your contract...</p>
+                <p className="text-sm text-muted-foreground">
+                  Extracting terms, analyzing fairness, generating script
+                </p>
+              </div>
+            </div>
           )}
+
+          {askMutation.isPending && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div className="flex-1 bg-muted rounded-lg p-4">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
-      </div>
+
+        {/* Input */}
+        <div className="border-t border-border p-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <Upload className="w-4 h-4" />
+            </Button>
+            <Input
+              placeholder={
+                contractId
+                  ? "Ask about your contract..."
+                  : "Upload a contract first..."
+              }
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              disabled={!contractId || askMutation.isPending}
+            />
+            <Button
+              onClick={handleSend}
+              disabled={!inputMessage.trim() || !contractId || askMutation.isPending}
+              size="icon"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
 
-function ProcessingStep({
-  label,
-  isComplete,
-  isActive,
-}: {
-  label: string;
-  isComplete: boolean;
-  isActive: boolean;
-}) {
+// Message Renderer Component
+function MessageRenderer({ message }: { message: ChatMessage }) {
+  if (message.type === "user") {
+    return (
+      <div className="flex justify-end gap-3">
+        <div className="flex flex-col items-end max-w-[80%]">
+          <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm p-4 shadow-sm">
+            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 px-2">
+            {formatDateTime(message.timestamp)}
+          </p>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-bold text-primary-foreground">You</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (message.type === "analysis") {
+    const data = message.data;
+    return (
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 space-y-3 max-w-[90%]">
+          {/* Fairness Score Card */}
+          <Card className="p-6 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 border-blue-500/30 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
+                  {Math.round(data.fairness_score)}%
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">Fairness Score</p>
+              </div>
+              <Badge
+                className={cn(
+                  "text-base px-4 py-2 font-semibold",
+                  data.fairness_score >= 80 && "bg-green-500 text-white",
+                  data.fairness_score >= 60 && data.fairness_score < 80 && "bg-blue-500 text-white",
+                  data.fairness_score >= 40 && data.fairness_score < 60 && "bg-yellow-500 text-white",
+                  data.fairness_score < 40 && "bg-red-500 text-white"
+                )}
+              >
+                {data.rating}
+              </Badge>
+            </div>
+          </Card>
+
+          {/* Red Flags */}
+          {data.red_flags.length > 0 && (
+            <Card className="p-5 border-red-500/30 bg-red-500/5 shadow-md">
+              <h4 className="font-semibold flex items-center gap-2 mb-3 text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-5 h-5" />
+                🚩 Red Flags Found ({data.red_flags.length})
+              </h4>
+              <ul className="space-y-2">
+                {data.red_flags.map((flag: string, i: number) => (
+                  <li key={i} className="text-sm flex items-start gap-2 p-2 rounded bg-red-500/5">
+                    <span className="text-red-500 font-bold mt-0.5">•</span>
+                    <span className="flex-1">{flag}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {/* Warnings */}
+          {data.warnings.length > 0 && (
+            <Card className="p-5 border-yellow-500/30 bg-yellow-500/5 shadow-md">
+              <h4 className="font-semibold flex items-center gap-2 mb-3 text-yellow-600 dark:text-yellow-400">
+                <TrendingUp className="w-5 h-5" />
+                ⚠️ Warnings ({data.warnings.length})
+              </h4>
+              <ul className="space-y-2">
+                {data.warnings.map((warning: string, i: number) => (
+                  <li key={i} className="text-sm flex items-start gap-2 p-2 rounded bg-yellow-500/5">
+                    <span className="text-yellow-500 font-bold mt-0.5">•</span>
+                    <span className="flex-1">{warning}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <p className="text-xs text-muted-foreground px-2">
+            {formatDateTime(message.timestamp)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (message.type === "script") {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 max-w-[90%]">
+          <Card className="p-6 border-primary/30 bg-gradient-to-br from-primary/5 to-secondary/5 shadow-lg">
+            <h4 className="font-bold text-lg flex items-center gap-2 mb-4 text-primary">
+              <FileText className="w-5 h-5" />
+              📋 Your Personalized Negotiation Script
+            </h4>
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed bg-background/50 rounded-lg p-4 border border-border">
+                {message.content}
+              </div>
+            </div>
+          </Card>
+          <p className="text-xs text-muted-foreground mt-2 px-2">
+            {formatDateTime(message.timestamp)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Regular AI text message
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-      {isComplete ? (
-        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-      ) : isActive ? (
-        <Loader2 className="w-5 h-5 text-primary animate-spin flex-shrink-0" />
-      ) : (
-        <div className="w-5 h-5 rounded-full border-2 border-muted flex-shrink-0" />
-      )}
-      <span
-        className={`text-sm font-medium ${
-          isComplete || isActive ? "text-foreground" : "text-muted-foreground"
-        }`}
-      >
-        {label}
-      </span>
+    <div className="flex items-start gap-3">
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
+        <Sparkles className="w-4 h-4 text-white" />
+      </div>
+      <div className="flex-1 max-w-[80%]">
+        <div className="bg-muted/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 shadow-sm border border-border/50">
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            {message.content}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1 px-2">
+          {formatDateTime(message.timestamp)}
+        </p>
+      </div>
     </div>
   );
 }

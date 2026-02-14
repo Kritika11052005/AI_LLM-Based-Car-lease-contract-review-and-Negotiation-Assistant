@@ -1,208 +1,244 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Card } from "@/components/ui/card";
-import { Sidebar } from "@/components/dashboard/SideBar";
-import { 
-  FileText, 
-  TrendingUp, 
-  AlertCircle, 
-  CheckCircle 
+import api from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  FileText,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle,
+  Upload,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react";
-import gsap from "gsap";
-import Galaxy from '@/components/Galaxy';
+import { useRouter } from "next/navigation";
+import { formatIndianCurrency } from "@/lib/utils";
+
+interface DashboardStats {
+  total_contracts: number;
+  average_fairness_score: number;
+  contracts_this_month: number;
+  fairness_trend: { month: string; score: number }[];
+  risk_distribution: { rating: string; count: number }[];
+  estimated_savings: number;
+  recent_contracts: any[];
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const headerRef = useRef<HTMLDivElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const cardsRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
-  const stats = [
-    {
-      name: "Total Contracts",
-      value: "0",
-      icon: FileText,
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
+  // Fetch dashboard analytics
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboard-analytics"],
+    queryFn: async () => {
+      try {
+        const response = await api.get<DashboardStats>("/dashboard/analytics");
+        return response.data;
+      } catch (error) {
+        // Return mock data if endpoint doesn't exist yet
+        return {
+          total_contracts: 0,
+          average_fairness_score: 0,
+          contracts_this_month: 0,
+          fairness_trend: [],
+          risk_distribution: [],
+          estimated_savings: 0,
+          recent_contracts: [],
+        };
+      }
     },
-    {
-      name: "Avg Fairness Score",
-      value: "N/A",
-      icon: TrendingUp,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-    },
-    {
-      name: "Red Flags Found",
-      value: "0",
-      icon: AlertCircle,
-      color: "text-red-500",
-      bgColor: "bg-red-500/10",
-    },
-    {
-      name: "Saved Deals",
-      value: "0",
-      icon: CheckCircle,
-      color: "text-cyan-500",
-      bgColor: "bg-cyan-500/10",
-    },
-  ];
+  });
 
-  useEffect(() => {
-    // GSAP Animations
-    const ctx = gsap.context(() => {
-      // Header animation - fade in from top
-      gsap.from(headerRef.current, {
-        opacity: 0,
-        y: -50,
-        duration: 1,
-        ease: "power3.out",
-      });
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
 
-      // Stats cards - stagger animation from bottom
-      gsap.from(".stat-card", {
-        opacity: 0,
-        y: 60,
-        duration: 0.8,
-        stagger: 0.15,
-        ease: "back.out(1.7)",
-        delay: 0.3,
-      });
-
-      // Cards section - fade in with scale
-      gsap.from(cardsRef.current, {
-        opacity: 0,
-        scale: 0.95,
-        duration: 0.8,
-        ease: "power2.out",
-        delay: 0.8,
-      });
-
-      // Continuous floating animation for stat values
-      gsap.to(".stat-value", {
-        y: -5,
-        duration: 2,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut",
-        stagger: 0.2,
-      });
-
-      // Icon rotation on hover effect
-      const statCards = document.querySelectorAll(".stat-card");
-      statCards.forEach((card) => {
-        const icon = card.querySelector(".stat-icon");
-        
-        card.addEventListener("mouseenter", () => {
-          gsap.to(icon, {
-            rotation: 360,
-            scale: 1.2,
-            duration: 0.6,
-            ease: "back.out(2)",
-          });
-        });
-        
-        card.addEventListener("mouseleave", () => {
-          gsap.to(icon, {
-            rotation: 0,
-            scale: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          });
-        });
-      });
-    });
-
-    return () => ctx.revert();
-  }, []);
+  const hasContracts = stats && stats.total_contracts > 0;
 
   return (
-    <>
-      {/* Galaxy Background - Lowest layer */}
-      <div className="fixed inset-0 w-full h-full z-0">
-        <Galaxy 
-          mouseRepulsion
-          mouseInteraction
-          density={1}
-          glowIntensity={0.3}
-          saturation={0}
-          hueShift={140}
-          twinkleIntensity={0.3}
-          rotationSpeed={0.1}
-          repulsionStrength={2}
-          autoCenterRepulsion={0}
-          starSpeed={0.5}
-          speed={1}
-        />
+    <div className="space-y-8 pb-8">
+      {/* Welcome Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          Welcome back, {user?.fullName?.split(" ")[0] || "User"}! 👋
+        </h1>
+        <p className="text-muted-foreground text-sm md:text-base">
+          Here&apos;s an overview of your car lease contracts and negotiations.
+        </p>
       </div>
 
-      {/* Sidebar - Higher layer */}
-      <Sidebar />
+      {hasContracts ? (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatsCard
+              title="Total Contracts"
+              value={stats.total_contracts.toString()}
+              icon={FileText}
+              color="text-blue-500"
+              bgColor="bg-blue-500/10"
+            />
+            <StatsCard
+              title="Avg Fairness Score"
+              value={`${Math.round(stats.average_fairness_score)}%`}
+              icon={TrendingUp}
+              color="text-green-500"
+              bgColor="bg-green-500/10"
+            />
+            <StatsCard
+              title="This Month"
+              value={stats.contracts_this_month.toString()}
+              icon={CheckCircle}
+              color="text-cyan-500"
+              bgColor="bg-cyan-500/10"
+            />
+            <StatsCard
+              title="Est. Savings"
+              value={formatIndianCurrency(stats.estimated_savings)}
+              icon={AlertCircle}
+              color="text-orange-500"
+              bgColor="bg-orange-500/10"
+            />
+          </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 min-h-screen p-8 md:p-12 lg:p-16">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Welcome Header */}
-          <div ref={headerRef} className="space-y-2">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#B19EEF] to-[#5227FF] bg-clip-text text-transparent">
-              Welcome back, {user?.fullName?.split(" ")[0] || "User"}!
-            </h1>
-            <p className="text-muted-foreground">
-              Here&apos;s an overview of your car lease contracts and negotiations.
+          {/* Charts would go here when data is available */}
+        </>
+      ) : (
+        <EmptyState />
+      )}
+    </div>
+  );
+}
+
+function StatsCard({
+  title,
+  value,
+  icon: Icon,
+  color,
+  bgColor,
+}: {
+  title: string;
+  value: string;
+  icon: any;
+  color: string;
+  bgColor: string;
+}) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow duration-300 border-border/50">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">{title}</p>
+            <p className="text-2xl md:text-3xl font-bold">{value}</p>
+          </div>
+          <div className={`p-3 rounded-lg ${bgColor}`}>
+            <Icon className={`w-6 h-6 ${color}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState() {
+  const router = useRouter();
+
+  return (
+    <Card className="border-border/50">
+      <CardContent className="p-8 md:p-12">
+        <div className="flex flex-col items-center justify-center space-y-6 text-center max-w-2xl mx-auto">
+          {/* Icon */}
+          <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+            <FileText className="w-10 h-10 md:w-12 md:h-12 text-primary" />
+          </div>
+
+          {/* Text */}
+          <div className="space-y-3">
+            <h2 className="text-2xl md:text-3xl font-bold">No contracts yet</h2>
+            <p className="text-muted-foreground text-sm md:text-base max-w-md">
+              Upload your first car lease contract to get started with AI-powered
+              analysis and negotiation assistance.
             </p>
           </div>
 
-          {/* Stats Grid */}
-          <div ref={statsRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <Card
-                  key={stat.name}
-                  className="stat-card p-6 hover:shadow-lg transition-shadow duration-300 border-border/50 hover:border-primary/50 backdrop-blur-md bg-card/70"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{stat.name}</p>
-                      <p className="stat-value text-3xl font-bold mt-2">{stat.value}</p>
-                    </div>
-                    <div className={`stat-icon p-3 rounded-lg ${stat.bgColor}`}>
-                      <Icon className={`w-6 h-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <Button
+              onClick={() => router.push("/dashboard/upload")}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              <Upload className="w-5 h-5 mr-2" />
+              Upload Contract
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/dashboard/negotiate")}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              <Sparkles className="w-5 h-5 mr-2" />
+              Start Negotiation
+            </Button>
           </div>
 
-          {/* Quick Actions */}
-          <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6 border-border/50 backdrop-blur-md bg-card/70">
-              <h3 className="text-lg font-semibold mb-4">Get Started</h3>
-              <div className="space-y-3">
-                <a
-                  href="/dashboard/upload"
-                  className="block p-4 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-                >
-                  <h4 className="font-medium text-primary">Upload Your First Contract</h4>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Get AI-powered analysis and negotiation tips
-                  </p>
-                </a>
+          {/* Feature Highlights */}
+          <div className="grid sm:grid-cols-3 gap-6 mt-8 w-full">
+            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
+              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3 mx-auto">
+                <FileText className="w-6 h-6 text-primary" />
               </div>
-            </Card>
+              <h3 className="font-semibold mb-2">AI Analysis</h3>
+              <p className="text-sm text-muted-foreground">
+                Get fairness scores and identify red flags instantly
+              </p>
+            </div>
 
-            <Card className="p-6 border-border/50 backdrop-blur-md bg-card/70">
-              <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-              <div className="flex items-center justify-center h-32 text-muted-foreground">
-                <p>No recent activity</p>
+            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
+              <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center mb-3 mx-auto">
+                <TrendingUp className="w-6 h-6 text-secondary" />
               </div>
-            </Card>
+              <h3 className="font-semibold mb-2">Smart Negotiation</h3>
+              <p className="text-sm text-muted-foreground">
+                Personalized scripts and strategies for better deals
+              </p>
+            </div>
+
+            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
+              <div className="w-12 h-12 rounded-lg bg-green-500/10 flex items-center justify-center mb-3 mx-auto">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+              </div>
+              <h3 className="font-semibold mb-2">Save Money</h3>
+              <p className="text-sm text-muted-foreground">
+                Negotiate better terms and track your savings
+              </p>
+            </div>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-8 pb-8">
+      <div className="space-y-2">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-5 w-96" />
       </div>
-    </>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
+      </div>
+      <Skeleton className="h-96 w-full" />
+    </div>
   );
 }
