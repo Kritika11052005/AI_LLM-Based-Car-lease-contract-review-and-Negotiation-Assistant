@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import logging
 from app.database import db
+from fastapi.middleware.cors import CORSMiddleware 
 from app.routes.upload import router as upload_router
 from app.routes.vin import router as vin_router
 from app.routes.negotiation_routes import router as negotiation_router  # ← Changed from negotiation_routes
@@ -9,7 +10,14 @@ from app.generated.prisma.engine.errors import EngineConnectionError
 
 app = FastAPI(title="Car Contract Analysis API")
 
-
+# ← ADD CORS MIDDLEWARE HERE
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.on_event("startup")
 async def startup():
     """

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { backendAPI } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
 import { Contract, UploadContractResponse, ExtractSLAResponse } from "@/types";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ export function useContracts() {
   const { data: contracts, isLoading } = useQuery({
     queryKey: ["contracts"],
     queryFn: async () => {
-      const response = await api.get<Contract[]>(API_ENDPOINTS.CONTRACTS.LIST);
+      const response = await backendAPI.get<Contract[]>(API_ENDPOINTS.CONTRACTS.LIST);
       return response.data;
     },
   });
@@ -27,7 +27,7 @@ export function useContract(id: string) {
   return useQuery({
     queryKey: ["contract", id],
     queryFn: async () => {
-      const response = await api.get<Contract>(
+      const response = await backendAPI.get<Contract>(
         API_ENDPOINTS.CONTRACTS.GET(id)
       );
       return response.data;

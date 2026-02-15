@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// frontend/lib/api.ts - UPDATED for SSR contracts
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 import { APIError } from "@/types";
 
 /**
  * Axios instance for BACKEND (Python FastAPI - port 8000)
- * Used for: Contracts, VIN lookup, Negotiation
+ * Used ONLY for: Upload, Extract-SLA, VIN lookup, Negotiation (AI processing)
  */
 export const backendAPI: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000",
@@ -17,7 +18,7 @@ export const backendAPI: AxiosInstance = axios.create({
 
 /**
  * Axios instance for FRONTEND (Next.js API routes - port 3000)
- * Used for: Authentication
+ * Used for: Authentication + Contract fetching (SSR)
  */
 export const frontendAPI: AxiosInstance = axios.create({
   baseURL: "/api", // Relative URL - calls Next.js API routes
@@ -63,10 +64,28 @@ backendAPI.interceptors.response.use(
   }
 );
 
-// Add interceptors to frontendAPI (for auth)
+// Add interceptors to frontendAPI
+frontendAPI.interceptors.request.use(
+  (config) => {
+    const token = Cookies.get("access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 frontendAPI.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<APIError>) => {
+    if (error.response?.status === 401) {
+      Cookies.remove("access_token");
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
+    
     if (!error.response) {
       return Promise.reject({
         detail: "Network error. Please check your connection.",
@@ -75,7 +94,7 @@ frontendAPI.interceptors.response.use(
     }
     
     return Promise.reject({
-      detail: error.response.data?.detail || "An error occurred",
+      detail: error.response.data?.detail || error.response.data?.error || "An error occurred",
       status: error.response.status,
     });
   }
@@ -120,5 +139,5 @@ export const handleAPIError = (error: unknown): string => {
   return "An unexpected error occurred";
 };
 
-// Default export is backend API for backward compatibility
-export default backendAPI;
+// Default export is frontendAPI now (for SSR contract fetching)
+export default frontendAPI;

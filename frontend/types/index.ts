@@ -276,6 +276,7 @@ export interface DashboardAnalytics {
 export interface APIError {
   detail: string;
   status?: number;
+  [key: string]: string | number | undefined;
 }
 
 // ============================================

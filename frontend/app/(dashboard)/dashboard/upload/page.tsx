@@ -5,23 +5,23 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { uploadFile } from "@/lib/api";
+import { backendAPI } from "@/lib/api";
 import { API_ENDPOINTS, UPLOAD_CONFIG } from "@/lib/constants";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";  // ✅ Import useAuth
 import {
   Upload,
   FileText,
   CheckCircle,
-  AlertCircle,
   Loader2,
   X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import api from "@/lib/api";
 
 export default function UploadContractPage() {
   const router = useRouter();
+  const { user } = useAuth();  // ✅ Get current user
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -29,12 +29,36 @@ export default function UploadContractPage() {
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const response = await uploadFile(
+      // ✅ Create FormData with userId
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      // ✅ ADD: Send userId to backend
+      if (user?.id) {
+        formData.append("user_id", user.id);
+      }
+
+      const config = {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent: any) => {
+          if (progressEvent.total) {
+            const progress = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            setUploadProgress(progress);
+          }
+        },
+      };
+
+      const response = await backendAPI.post(
         API_ENDPOINTS.CONTRACTS.UPLOAD,
-        file,
-        setUploadProgress
+        formData,
+        config
       );
-      return response;
+      
+      return response.data;
     },
     onSuccess: (data) => {
       toast.success("Contract uploaded successfully!");
@@ -53,7 +77,7 @@ export default function UploadContractPage() {
   // SLA extraction mutation
   const extractSLAMutation = useMutation({
     mutationFn: async (contractId: string) => {
-      const response = await api.post(
+      const response = await backendAPI.post(
         API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId)
       );
       return response.data;
@@ -95,6 +119,14 @@ export default function UploadContractPage() {
 
   const handleUpload = () => {
     if (!selectedFile) return;
+    
+    // ✅ CHECK: Make sure user is logged in
+    if (!user?.id) {
+      toast.error("Please login to upload contracts");
+      router.push("/login");
+      return;
+    }
+    
     uploadMutation.mutate(selectedFile);
   };
 

@@ -3,9 +3,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { uploadFile } from "@/lib/api";
+import { backendAPI } from "@/lib/api";  // ✅ Use backendAPI for upload
 import { API_ENDPOINTS } from "@/lib/constants";
 import api from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ interface Conversation {
 }
 
 export default function NegotiatePage() {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -70,7 +72,6 @@ To get started, upload your contract below!`,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -78,17 +79,36 @@ To get started, upload your contract below!`,
   // Upload & process contract
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const response = await uploadFile(API_ENDPOINTS.CONTRACTS.UPLOAD, file, () => {});
-      return response;
+      // ✅ Create FormData with user_id
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      // ✅ ADD: Send userId to backend
+      if (user?.id) {
+        formData.append("user_id", user.id);
+      }
+
+      // ✅ FIX: Use backendAPI which goes directly to port 8000
+      const response = await backendAPI.post(
+        API_ENDPOINTS.CONTRACTS.UPLOAD,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      
+      return response.data;
     },
     onSuccess: async (data) => {
       setContractId(data.contract_id);
       
       // Extract SLA
-      const slaResponse = await api.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(data.contract_id));
+      const slaResponse = await backendAPI.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(data.contract_id));
       
       // Analyze
-      const analysisResponse = await api.post(API_ENDPOINTS.NEGOTIATION.ANALYZE(data.contract_id));
+      const analysisResponse = await backendAPI.post(API_ENDPOINTS.NEGOTIATION.ANALYZE(data.contract_id));
       const analysis = analysisResponse.data;
 
       // Add analysis cards
@@ -102,7 +122,7 @@ To get started, upload your contract below!`,
       setMessages((prev) => [...prev, analysisMessage]);
 
       // Generate script
-      const scriptResponse = await api.post(API_ENDPOINTS.NEGOTIATION.SCRIPT(data.contract_id));
+      const scriptResponse = await backendAPI.post(API_ENDPOINTS.NEGOTIATION.SCRIPT(data.contract_id));
       setThreadId(scriptResponse.data.thread_id);
 
       const scriptMessage: ChatMessage = {
@@ -137,7 +157,7 @@ To get started, upload your contract below!`,
   // Ask question
   const askMutation = useMutation({
     mutationFn: async (question: string) => {
-      const response = await api.post(API_ENDPOINTS.NEGOTIATION.ASK(contractId!), {
+      const response = await backendAPI.post(API_ENDPOINTS.NEGOTIATION.ASK(contractId!), {
         question,
         thread_id: threadId,
       });
@@ -159,6 +179,11 @@ To get started, upload your contract below!`,
   const handleFileUpload = (file: File) => {
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
       toast.error("File must be less than 10MB");
+      return;
+    }
+
+    if (!user?.id) {
+      toast.error("Please login to upload contracts");
       return;
     }
 
@@ -267,7 +292,7 @@ To get started, upload your contract below!`,
             <MessageRenderer key={msg.id} message={msg} />
           ))}
 
-          {/* Upload Prompt (shown after greeting) */}
+          {/* Upload Prompt */}
           {messages.length === 1 && (
             <div className="flex justify-center">
               <button
@@ -359,7 +384,7 @@ To get started, upload your contract below!`,
   );
 }
 
-// Message Renderer Component
+// Message Renderer Component (same as before)
 function MessageRenderer({ message }: { message: ChatMessage }) {
   if (message.type === "user") {
     return (
@@ -387,7 +412,6 @@ function MessageRenderer({ message }: { message: ChatMessage }) {
           <Sparkles className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 space-y-3 max-w-[90%]">
-          {/* Fairness Score Card */}
           <Card className="p-6 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 border-blue-500/30 shadow-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -410,7 +434,6 @@ function MessageRenderer({ message }: { message: ChatMessage }) {
             </div>
           </Card>
 
-          {/* Red Flags */}
           {data.red_flags.length > 0 && (
             <Card className="p-5 border-red-500/30 bg-red-500/5 shadow-md">
               <h4 className="font-semibold flex items-center gap-2 mb-3 text-red-600 dark:text-red-400">
@@ -428,7 +451,6 @@ function MessageRenderer({ message }: { message: ChatMessage }) {
             </Card>
           )}
 
-          {/* Warnings */}
           {data.warnings.length > 0 && (
             <Card className="p-5 border-yellow-500/30 bg-yellow-500/5 shadow-md">
               <h4 className="font-semibold flex items-center gap-2 mb-3 text-yellow-600 dark:text-yellow-400">
@@ -480,7 +502,6 @@ function MessageRenderer({ message }: { message: ChatMessage }) {
     );
   }
 
-  // Regular AI text message
   return (
     <div className="flex items-start gap-3">
       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">

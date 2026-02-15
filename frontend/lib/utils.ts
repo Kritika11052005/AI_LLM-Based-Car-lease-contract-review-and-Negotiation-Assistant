@@ -55,9 +55,15 @@ export function formatIndianCurrency(amount: number | null | undefined): string 
   }
 }
 
+// frontend/lib/utils.ts
+
 export function formatPercentage(value: number | null | undefined): string {
   if (value === null || value === undefined) return "N/A";
-  return `${value.toFixed(2)}%`;
+  
+  // ✅ FIX: Convert to number if it's a Decimal object
+  const numValue = typeof value === 'number' ? value : Number(value);
+  
+  return `${numValue.toFixed(2)}%`;
 }
 
 export function formatDate(date: string | Date | null | undefined): string {

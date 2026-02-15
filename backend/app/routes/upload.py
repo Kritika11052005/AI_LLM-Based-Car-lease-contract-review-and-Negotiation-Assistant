@@ -1,6 +1,8 @@
 """
 Clean Upload & Extraction Routes
 Only 3 endpoints: upload, extract-sla, vin-lookup
+
+UPDATED: Now accepts user_id from frontend
 """
 
 import os
@@ -11,7 +13,7 @@ from decimal import Decimal
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from app.generated.prisma import Prisma
 from app.core.config import UPLOAD_DIR
 from app.core.ocr_service import OCRService
@@ -125,13 +127,18 @@ def parse_integer(value) -> Optional[int]:
 
 
 # ============================================
-# ENDPOINT 1: UPLOAD CONTRACT
+# ENDPOINT 1: UPLOAD CONTRACT (WITH USER_ID)
 # ============================================
 
 @router.post("/upload-contract")
-async def upload_contract(file: UploadFile = File(...)):
+async def upload_contract(
+    file: UploadFile = File(...),
+    user_id: str = Form(None)  # ✅ NEW: Accept user_id from frontend
+):
     """
     Upload contract PDF/image and extract text via OCR
+    
+    NEW: Accepts user_id from frontend to link contract to user
     
     Returns contract_id for use in /extract-sla/{contract_id}
     """
@@ -154,13 +161,20 @@ async def upload_contract(file: UploadFile = File(...)):
         if not extracted_text:
             raise HTTPException(status_code=400, detail="Could not extract text from file")
         
-        # 3. Create contract record (store extracted text in notes)
-        contract = await db.contract.create(
-            data={
-                "notes": extracted_text,
-                "docStatus": "uploaded"
-            }
-        )
+        # 3. Create contract record
+        # ✅ NEW: Set userId if provided
+        contract_data = {
+            "notes": extracted_text,
+            "docStatus": "uploaded"
+        }
+        
+        if user_id:
+            contract_data["userId"] = user_id
+            print(f"✅ Setting userId: {user_id}")
+        else:
+            print("⚠️  No userId provided")
+        
+        contract = await db.contract.create(data=contract_data)
         
         # 4. Create contract file record
         contract_file = await db.contractfile.create(
@@ -178,7 +192,8 @@ async def upload_contract(file: UploadFile = File(...)):
             "contract_id": contract.id,
             "file_id": contract_file.id,
             "filename": file.filename,
-            "text_length": len(extracted_text)
+            "text_length": len(extracted_text),
+            "user_id": user_id  # ✅ Return userId for confirmation
         }
         
     except HTTPException:
@@ -347,7 +362,7 @@ async def extract_sla(contract_id: str, db: Prisma = Depends(get_db)):
                     "term_months": updated_contract.sla.termMonths if updated_contract.sla else None,
                     "monthly_payment": float(updated_contract.sla.monthlyPayment) if updated_contract.sla and updated_contract.sla.monthlyPayment else None,
                     "mileage_allowance": updated_contract.sla.mileageAllowanceYr if updated_contract.sla else None,
-                    "overage_fee": float(updated_contract.sla.mileageOverageFee) if updated_contract.sla and updated_contract.sla.mileageOverageFee else None,  # ✅ This should now work!
+                    "overage_fee": float(updated_contract.sla.mileageOverageFee) if updated_contract.sla and updated_contract.sla.mileageOverageFee else None,
                     "purchase_option": float(updated_contract.sla.purchaseOptionPrice) if updated_contract.sla and updated_contract.sla.purchaseOptionPrice else None
                 }
             }

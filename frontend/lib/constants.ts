@@ -1,39 +1,39 @@
-// frontend/lib/constants.ts - UPDATED
+// frontend/lib/constants.ts - UPDATED for SSR contracts
 /**
- * Updated constants for SSR auth
+ * Updated constants - ALL SSR now (auth + contracts)
  */
 
 /**
  * API Endpoints
  */
 export const API_ENDPOINTS = {
-  // Auth (Next.js API routes - NOT backend)
+  // Auth (Next.js SSR API routes)
   AUTH: {
-    LOGIN: "/auth/login",       // ← Next.js route
-    REGISTER: "/auth/register", // ← Next.js route
-    LOGOUT: "/auth/logout",     // ← Next.js route
-    ME: "/auth/me",             // ← Next.js route
+    LOGIN: "/auth/login",
+    REGISTER: "/auth/register",
+    LOGOUT: "/auth/logout",
+    ME: "/auth/me",
   },
   
-  // Backend data endpoints (no /api prefix - goes directly to backend)
+  // Contracts (Next.js SSR API routes) ← CHANGED!
   CONTRACTS: {
-    UPLOAD: "/upload-contract",
-    EXTRACT_SLA: (id: string) => `/extract-sla/${id}`,
-    GET: (id: string) => `/contracts/${id}`,
-    LIST: "/contracts",
+    UPLOAD: "/api/upload-contract",        // ← Still backend (file upload)
+    EXTRACT_SLA: (id: string) => `/api/extract-sla/${id}`, // ← Still backend (AI processing)
+    GET: (id: string) => `/contracts/${id}`,  // ← NOW SSR!
+    LIST: "/contracts",                       // ← NOW SSR!
     DELETE: (id: string) => `/contracts/${id}`,
   },
-  
-  // Negotiation (backend)
+
+  // Negotiation (backend - AI processing)
   NEGOTIATION: {
-    ANALYZE: (id: string) => `/negotiation/analyze-contract/${id}`,
-    SCRIPT: (id: string) => `/negotiation/negotiate-script/${id}`,
-    ASK: (id: string) => `/negotiation/negotiate-ask/${id}`,
+    ANALYZE: (id: string) => `/api/negotiation/analyze-contract/${id}`,
+    SCRIPT: (id: string) => `/api/negotiation/negotiate-script/${id}`,
+    ASK: (id: string) => `/api/negotiation/negotiate-ask/${id}`,
   },
-  
-  // VIN (backend)
+
+  // VIN (backend - external API)
   VIN: {
-    LOOKUP: (vin: string) => `/vin-lookup/${vin}`,
+    LOOKUP: (vin: string) => `/api/vin-lookup/${vin}`,
   },
 } as const;
 
