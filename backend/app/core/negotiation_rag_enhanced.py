@@ -8,7 +8,7 @@ import os
 from typing import Dict, List, Optional
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
-from langchain.schema import Document
+from langchain_core.documents import Document
 from dotenv import load_dotenv
 import json
 
@@ -25,7 +25,7 @@ class NegotiationRAG:
     def __init__(self):
         """Initialize RAG components"""
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/gemini-embedding-001",
             google_api_key=os.getenv("GEMINI_API_KEY")
         )
         
@@ -293,8 +293,8 @@ Keep it ready-to-use (5-7 paragraphs). Use actual numbers and tactics provided.
 Generate the script:"""
         
         try:
-            response = self.llm.predict(prompt)
-            return response
+            response = self.llm.invoke(prompt)
+            return response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             return f"Error generating script: {str(e)}"
     
@@ -373,8 +373,8 @@ Provide a specific, actionable answer (2-5 sentences). Reference the tactics and
 Answer:"""
         
         try:
-            response = self.llm.predict(prompt)
-            return response
+            response = self.llm.invoke(prompt)
+            return response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             return f"Error: {str(e)}"
 

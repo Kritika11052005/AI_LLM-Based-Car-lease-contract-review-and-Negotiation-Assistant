@@ -4,9 +4,10 @@ from app.database import db
 from fastapi.middleware.cors import CORSMiddleware 
 from app.routes.upload import router as upload_router
 from app.routes.vin import router as vin_router
-from app.routes.negotiation_routes import router as negotiation_router  # ← Changed from negotiation_routes
+from app.routes.negotiation_routes import router as negotiation_router
+from app.routes.fairness import router as fairness_router
 from app.generated.prisma.engine.errors import EngineConnectionError
-
+from app.routes import price_estimation  # TODO: Implement price estimation routes
 
 app = FastAPI(title="Car Contract Analysis API")
 
@@ -43,8 +44,9 @@ async def shutdown():
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(vin_router, prefix="/api")
-app.include_router(negotiation_router, prefix="/api/negotiation")  # ← Added /negotiation prefix
-
+app.include_router(negotiation_router, prefix="/api/negotiation")
+app.include_router(fairness_router, prefix="/api/fairness", tags=["fairness"])
+app.include_router(price_estimation.router, prefix="/api/price", tags=["price"])  # TODO: Implement
 
 @app.get("/")
 def root():
