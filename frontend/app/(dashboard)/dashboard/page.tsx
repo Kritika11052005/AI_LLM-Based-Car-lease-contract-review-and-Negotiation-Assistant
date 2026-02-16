@@ -1,244 +1,224 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
+// app/(dashboard)/dashboard/page.tsx
+import { redirect } from "next/navigation";
+import { getCurrentUserServer } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { DASHBOARD_CONFIG } from "@/config/dashboard";
+import type { DashboardAnalytics } from "@/types/dashboard";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
-import api from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  FileText,
-  TrendingUp,
-  AlertCircle,
-  CheckCircle,
-  Upload,
-  ArrowRight,
-  Sparkles,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { formatIndianCurrency } from "@/lib/utils";
-
-interface DashboardStats {
-  total_contracts: number;
-  average_fairness_score: number;
-  contracts_this_month: number;
-  fairness_trend: { month: string; score: number }[];
-  risk_distribution: { rating: string; count: number }[];
-  estimated_savings: number;
-  recent_contracts: any[];
-}
-
-export default function DashboardPage() {
-  const { user } = useAuth();
-  const router = useRouter();
-
-  // Fetch dashboard analytics
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ["dashboard-analytics"],
-    queryFn: async () => {
-      try {
-        const response = await api.get<DashboardStats>("/dashboard/analytics");
-        return response.data;
-      } catch (error) {
-        // Return mock data if endpoint doesn't exist yet
-        return {
-          total_contracts: 0,
-          average_fairness_score: 0,
-          contracts_this_month: 0,
-          fairness_trend: [],
-          risk_distribution: [],
-          estimated_savings: 0,
-          recent_contracts: [],
-        };
+async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics> {
+  // Get all user's contracts
+  const contracts = await prisma.contract.findMany({
+    where: { userId },
+    include: {
+      sla: true,
+      vehicle: true,
+      extractions: {
+        include: {
+          extractedClauses: true
+        }
       }
     },
+    orderBy: { createdAt: 'desc' }
   });
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
+  // Calculate KPI Summary
+  const totalContracts = contracts.length;
+  
+  const fairnessScores = contracts
+    .filter(c => c.fairnessScore)
+    .map(c => Number(c.fairnessScore));
+  
+  const averageFairnessScore = fairnessScores.length > 0
+    ? fairnessScores.reduce((a, b) => a + b, 0) / fairnessScores.length
+    : 0;
+
+  // Count high-risk clauses across all contracts
+  const highRiskClauses = contracts.reduce((count, contract) => {
+    const highRisk = contract.extractions.reduce((extractionCount, extraction) => {
+      return extractionCount + extraction.extractedClauses.filter(
+        clause => clause.redFlagLevel === 'high'
+      ).length;
+    }, 0);
+    return count + highRisk;
+  }, 0);
+
+  // Calculate estimated savings
+  const estimatedSavings = contracts.reduce((total, contract) => {
+    if (!contract.sla) return total;
+    
+    // Disposition fee above benchmark is considered high
+    const dispositionFee = Number(contract.sla.dispositionFee || 0);
+    const savingsFromDisposition = Math.max(0, dispositionFee - DASHBOARD_CONFIG.fees.dispositionFeeBenchmark);
+    
+    // Early termination fee above benchmark is high
+    const earlyTermFee = Number(contract.sla.earlyTerminationFee || 0);
+    const savingsFromEarlyTerm = Math.max(0, earlyTermFee - DASHBOARD_CONFIG.fees.earlyTerminationFeeBenchmark);
+    
+    return total + savingsFromDisposition + savingsFromEarlyTerm;
+  }, 0);
+
+  // Get latest contract
+  const latestContract = contracts[0] || null;
+  
+  let latestContractData = null;
+  if (latestContract) {
+    // Get top red flags
+    const allClauses = latestContract.extractions.flatMap(
+      e => e.extractedClauses
+    );
+    
+    const topRedFlags = allClauses
+      .filter(c => c.redFlagLevel && c.redFlagLevel !== 'low')
+      .sort((a, b) => {
+        const severityOrder = { high: 3, medium: 2, low: 1 };
+        return severityOrder[b.redFlagLevel as keyof typeof severityOrder] - 
+               severityOrder[a.redFlagLevel as keyof typeof severityOrder];
+      })
+      .slice(0, DASHBOARD_CONFIG.display.maxTopRedFlags)
+      .map(c => ({
+        title: c.clauseType || 'Unknown Clause',
+        description: c.comment || c.textSnippet || 'No details available',
+        severity: c.redFlagLevel || 'medium'
+      }));
+
+    latestContractData = {
+      id: latestContract.id,
+      contract_name: latestContract.vehicle 
+        ? `${latestContract.vehicle.year} ${latestContract.vehicle.make} ${latestContract.vehicle.model}`
+        : latestContract.dealerOfferName || 'Unnamed Contract',
+      upload_date: latestContract.createdAt.toISOString(),
+      fairness_score: Number(latestContract.fairnessScore || 0),
+      risk_level: (latestContract.redFlagLevel || DASHBOARD_CONFIG.display.defaultRiskLevel) as 'high' | 'medium' | 'low',
+      ai_confidence_percentage: DASHBOARD_CONFIG.display.defaultAIConfidence,
+      top_red_flags: topRedFlags as { title: string; description: string; severity: 'high' | 'medium' | 'low' }[]
+    };
   }
 
-  const hasContracts = stats && stats.total_contracts > 0;
-
-  return (
-    <div className="space-y-8 pb-8">
-      {/* Welcome Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          Welcome back, {user?.fullName?.split(" ")[0] || "User"}! 👋
-        </h1>
-        <p className="text-muted-foreground text-sm md:text-base">
-          Here&apos;s an overview of your car lease contracts and negotiations.
-        </p>
-      </div>
-
-      {hasContracts ? (
-        <>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatsCard
-              title="Total Contracts"
-              value={stats.total_contracts.toString()}
-              icon={FileText}
-              color="text-blue-500"
-              bgColor="bg-blue-500/10"
-            />
-            <StatsCard
-              title="Avg Fairness Score"
-              value={`${Math.round(stats.average_fairness_score)}%`}
-              icon={TrendingUp}
-              color="text-green-500"
-              bgColor="bg-green-500/10"
-            />
-            <StatsCard
-              title="This Month"
-              value={stats.contracts_this_month.toString()}
-              icon={CheckCircle}
-              color="text-cyan-500"
-              bgColor="bg-cyan-500/10"
-            />
-            <StatsCard
-              title="Est. Savings"
-              value={formatIndianCurrency(stats.estimated_savings)}
-              icon={AlertCircle}
-              color="text-orange-500"
-              bgColor="bg-orange-500/10"
-            />
-          </div>
-
-          {/* Charts would go here when data is available */}
-        </>
-      ) : (
-        <EmptyState />
-      )}
-    </div>
+  // Fairness trend (configurable time period)
+  const fairnessTrendStartDate = new Date();
+  fairnessTrendStartDate.setMonth(fairnessTrendStartDate.getMonth() - DASHBOARD_CONFIG.timePeriods.fairnessTrendMonths);
+  
+  const recentContracts = contracts.filter(
+    c => c.createdAt >= fairnessTrendStartDate && c.fairnessScore
   );
+
+  const fairnessTrend = recentContracts.map(c => ({
+    date: c.createdAt.toISOString(),
+    fairness_score: Number(c.fairnessScore),
+    contract_id: c.id
+  }));
+
+  // Risk distribution
+  const riskCounts = contracts.reduce((acc, contract) => {
+    const level = contract.redFlagLevel || 'low';
+    acc[level] = (acc[level] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const riskDistribution = {
+    high_risk: riskCounts.high || 0,
+    medium_risk: riskCounts.medium || 0,
+    low_risk: riskCounts.low || 0
+  };
+
+  // Savings insight
+  const contractsWithSLA = contracts.filter(c => c.sla);
+  const avgAPR = contractsWithSLA.length > 0
+    ? contractsWithSLA.reduce((sum, c) => sum + Number(c.sla!.aprPercent || 0), 0) / contractsWithSLA.length
+    : 0;
+
+  const aprAboveMarket = Math.max(0, avgAPR - DASHBOARD_CONFIG.market.averageAPR);
+
+  const savingsInsight = {
+    average_apr_above_market: aprAboveMarket,
+    estimated_overpayment: estimatedSavings,
+    negotiation_leverage_points: DASHBOARD_CONFIG.negotiation.defaultLeveragePoints,
+    potential_savings_summary: `You could save approximately ₹${Math.round(estimatedSavings).toLocaleString('en-IN')} by negotiating better terms`
+  };
+
+  // Recent activities
+  const recentActivities = await prisma.auditEvent.findMany({
+    where: { userId },
+    orderBy: { occurredAt: 'desc' },
+    take: DASHBOARD_CONFIG.display.maxRecentActivities
+  });
+
+  const activities = recentActivities.map(event => ({
+    id: event.id,
+    action_type: event.action || 'unknown',
+    description: getActivityDescription(event),
+    timestamp: event.occurredAt.toISOString(),
+    contract_id: event.entityId || undefined
+  }));
+
+  // Calculate trends (compare to previous period)
+  const trendPeriodStart = new Date();
+  trendPeriodStart.setDate(trendPeriodStart.getDate() - DASHBOARD_CONFIG.timePeriods.trendPeriodDays);
+  
+  const contractsThisMonth = contracts.filter(c => c.createdAt >= trendPeriodStart).length;
+  const previousPeriodStart = new Date(trendPeriodStart);
+  previousPeriodStart.setDate(previousPeriodStart.getDate() - DASHBOARD_CONFIG.timePeriods.trendPeriodDays);
+  
+  const contractsPreviousMonth = contracts.filter(
+    c => c.createdAt >= previousPeriodStart && c.createdAt < trendPeriodStart
+  ).length;
+
+  const contractsTrend = contractsPreviousMonth > 0
+    ? ((contractsThisMonth - contractsPreviousMonth) / contractsPreviousMonth) * 100
+    : 0;
+
+  return {
+    kpi_summary: {
+      total_contracts_analyzed: totalContracts,
+      average_fairness_score: Math.round(averageFairnessScore),
+      estimated_savings_identified: Math.round(estimatedSavings),
+      total_high_risk_clauses: highRiskClauses,
+      trends: {
+        contracts_trend: Math.round(contractsTrend),
+        fairness_trend: 0,
+        savings_trend: 0,
+        risk_trend: 0
+      }
+    },
+    latest_contract: latestContractData,
+    fairness_trend: fairnessTrend,
+    risk_distribution: riskDistribution,
+    savings_insight: savingsInsight,
+    recent_activities: activities
+  };
 }
 
-function StatsCard({
-  title,
-  value,
-  icon: Icon,
-  color,
-  bgColor,
-}: {
-  title: string;
-  value: string;
-  icon: any;
-  color: string;
-  bgColor: string;
-}) {
-  return (
-    <Card className="hover:shadow-lg transition-shadow duration-300 border-border/50">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">{title}</p>
-            <p className="text-2xl md:text-3xl font-bold">{value}</p>
-          </div>
-          <div className={`p-3 rounded-lg ${bgColor}`}>
-            <Icon className={`w-6 h-6 ${color}`} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+function getActivityDescription(event: any): string {
+  const action = event.action || '';
+  const details = event.details as any;
+  
+  switch (action) {
+    case 'contract_upload':
+      return 'Contract uploaded successfully';
+    case 'sla_extraction':
+      return 'Contract terms extracted';
+    case 'negotiation_started':
+      return 'Negotiation thread created';
+    case 'vin_lookup':
+      return 'Vehicle information retrieved';
+    default:
+      return details?.description || 'Activity recorded';
+  }
 }
 
-function EmptyState() {
-  const router = useRouter();
+export default async function DashboardPage() {
+  // Get current user (server-side)
+  const user = await getCurrentUserServer();
+  
+  if (!user) {
+    redirect('/login');
+  }
 
-  return (
-    <Card className="border-border/50">
-      <CardContent className="p-8 md:p-12">
-        <div className="flex flex-col items-center justify-center space-y-6 text-center max-w-2xl mx-auto">
-          {/* Icon */}
-          <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-            <FileText className="w-10 h-10 md:w-12 md:h-12 text-primary" />
-          </div>
+  // Fetch dashboard analytics (server-side)
+  const analytics = await getDashboardAnalytics(user.id);
 
-          {/* Text */}
-          <div className="space-y-3">
-            <h2 className="text-2xl md:text-3xl font-bold">No contracts yet</h2>
-            <p className="text-muted-foreground text-sm md:text-base max-w-md">
-              Upload your first car lease contract to get started with AI-powered
-              analysis and negotiation assistance.
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Button
-              onClick={() => router.push("/dashboard/upload")}
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              <Upload className="w-5 h-5 mr-2" />
-              Upload Contract
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => router.push("/dashboard/negotiate")}
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              <Sparkles className="w-5 h-5 mr-2" />
-              Start Negotiation
-            </Button>
-          </div>
-
-          {/* Feature Highlights */}
-          <div className="grid sm:grid-cols-3 gap-6 mt-8 w-full">
-            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3 mx-auto">
-                <FileText className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">AI Analysis</h3>
-              <p className="text-sm text-muted-foreground">
-                Get fairness scores and identify red flags instantly
-              </p>
-            </div>
-
-            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center mb-3 mx-auto">
-                <TrendingUp className="w-6 h-6 text-secondary" />
-              </div>
-              <h3 className="font-semibold mb-2">Smart Negotiation</h3>
-              <p className="text-sm text-muted-foreground">
-                Personalized scripts and strategies for better deals
-              </p>
-            </div>
-
-            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-green-500/10 flex items-center justify-center mb-3 mx-auto">
-                <CheckCircle className="w-6 h-6 text-green-500" />
-              </div>
-              <h3 className="font-semibold mb-2">Save Money</h3>
-              <p className="text-sm text-muted-foreground">
-                Negotiate better terms and track your savings
-              </p>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-8 pb-8">
-      <div className="space-y-2">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-5 w-96" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-      <Skeleton className="h-96 w-full" />
-    </div>
-  );
+  // Pass data to client component
+  return <DashboardClient analytics={analytics} userName={user.name || user.email || 'User'} />;
 }

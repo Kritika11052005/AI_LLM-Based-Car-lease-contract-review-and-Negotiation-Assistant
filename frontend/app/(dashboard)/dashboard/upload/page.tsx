@@ -8,7 +8,8 @@ import { useRouter } from "next/navigation";
 import { backendAPI } from "@/lib/api";
 import { API_ENDPOINTS, UPLOAD_CONFIG } from "@/lib/constants";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";  // ✅ Import useAuth
+import { useAuth } from "@/hooks/useAuth";
+import { motion } from "framer-motion";
 import {
   Upload,
   FileText,
@@ -21,7 +22,7 @@ import { Progress } from "@/components/ui/progress";
 
 export default function UploadContractPage() {
   const router = useRouter();
-  const { user } = useAuth();  // ✅ Get current user
+  const { user } = useAuth();
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -29,11 +30,9 @@ export default function UploadContractPage() {
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      // ✅ Create FormData with userId
       const formData = new FormData();
       formData.append("file", file);
       
-      // ✅ ADD: Send userId to backend
       if (user?.id) {
         formData.append("user_id", user.id);
       }
@@ -63,8 +62,6 @@ export default function UploadContractPage() {
     onSuccess: (data) => {
       toast.success("Contract uploaded successfully!");
       setIsExtracting(true);
-
-      // Auto-start SLA extraction
       extractSLAMutation.mutate(data.contract_id);
     },
     onError: (error: any) => {
@@ -85,8 +82,6 @@ export default function UploadContractPage() {
     onSuccess: (data) => {
       toast.success("Contract analysis complete!");
       setIsExtracting(false);
-
-      // Redirect to contract detail page
       router.push(`/dashboard/contracts/${data.contract_id}`);
     },
     onError: (error: any) => {
@@ -101,7 +96,6 @@ export default function UploadContractPage() {
 
     if (!file) return;
 
-    // Validate file size
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
       toast.error("File size must be less than 10MB");
       return;
@@ -120,7 +114,6 @@ export default function UploadContractPage() {
   const handleUpload = () => {
     if (!selectedFile) return;
     
-    // ✅ CHECK: Make sure user is logged in
     if (!user?.id) {
       toast.error("Please login to upload contracts");
       router.push("/login");
@@ -265,50 +258,213 @@ export default function UploadContractPage() {
         </div>
       </Card>
 
-      {/* Info Cards */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <Card className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <Upload className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-1">Upload Contract</h3>
-              <p className="text-sm text-muted-foreground">
-                Upload your lease/loan contract as PDF or image
-              </p>
-            </div>
-          </div>
-        </Card>
+      {/* Premium Workflow Pipeline */}
+      <div className="relative pt-4 pb-16 px-4 md:px-8">
+        {/* Section Title */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-xl font-semibold text-[#E5E7EB] mb-2">
+            How It Works
+          </h2>
+          <p className="text-sm text-[#9CA3AF]">
+            AI-powered contract analysis in three simple steps
+          </p>
+        </motion.div>
 
-        <Card className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-secondary/10 rounded-lg">
-              <FileText className="w-6 h-6 text-secondary" />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-1">AI Analysis</h3>
-              <p className="text-sm text-muted-foreground">
-                Our AI extracts key terms and identifies red flags
-              </p>
+        {/* Workflow Cards Grid */}
+        <div className="grid md:grid-cols-3 gap-6 md:gap-8 relative max-w-6xl mx-auto">
+          {/* Connection Lines (Desktop) */}
+          <div className="hidden md:block absolute top-[60px] left-0 right-0 pointer-events-none z-0">
+            <div className="flex items-center gap-8 px-4">
+              <div className="flex-1" />
+              {/* Line 1->2 */}
+              <motion.div
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+                className="h-[2px] w-full bg-gradient-to-r from-[#2563EB]/60 via-[#2563EB]/30 to-transparent origin-left relative"
+              >
+                {/* Animated dot */}
+                <motion.div
+                  initial={{ left: 0, opacity: 0 }}
+                  animate={{ left: "100%", opacity: [0, 1, 1, 0] }}
+                  transition={{
+                    duration: 2,
+                    delay: 0.8,
+                    ease: "easeInOut",
+                    repeat: Infinity,
+                    repeatDelay: 3,
+                  }}
+                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#2563EB] rounded-full shadow-[0_0_8px_rgba(37,99,235,0.8)]"
+                />
+              </motion.div>
+              <div className="flex-1" />
+              {/* Line 2->3 */}
+              <motion.div
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.7, ease: "easeOut" }}
+                className="h-[2px] w-full bg-gradient-to-r from-[#00D4A8]/60 via-[#00D4A8]/30 to-transparent origin-left relative"
+              >
+                {/* Animated dot */}
+                <motion.div
+                  initial={{ left: 0, opacity: 0 }}
+                  animate={{ left: "100%", opacity: [0, 1, 1, 0] }}
+                  transition={{
+                    duration: 2,
+                    delay: 1.2,
+                    ease: "easeInOut",
+                    repeat: Infinity,
+                    repeatDelay: 3,
+                  }}
+                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#00D4A8] rounded-full shadow-[0_0_8px_rgba(0,212,168,0.8)]"
+                />
+              </motion.div>
+              <div className="flex-1" />
             </div>
           </div>
-        </Card>
 
-        <Card className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-green-500/10 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-500" />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-1">Get Insights</h3>
-              <p className="text-sm text-muted-foreground">
-                Receive negotiation tips and fairness scores
-              </p>
-            </div>
-          </div>
-        </Card>
+          {/* Card 1: Upload */}
+          <WorkflowCard
+            icon={Upload}
+            iconBg="bg-[#2563EB]/10"
+            iconColor="text-[#2563EB]"
+            title="Upload Contract"
+            description="Upload your lease/loan contract as PDF"
+            step="01"
+            delay={0}
+            accentColor="#2563EB"
+          />
+
+          {/* Card 2: AI Analysis */}
+          <WorkflowCard
+            icon={FileText}
+            iconBg="bg-[#00D4A8]/10"
+            iconColor="text-[#00D4A8]"
+            title="AI Analysis"
+            description="Our AI extracts key terms and finds red flags"
+            step="02"
+            delay={0.2}
+            accentColor="#00D4A8"
+          />
+
+          {/* Card 3: Get Insights */}
+          <WorkflowCard
+            icon={CheckCircle}
+            iconBg="bg-[#10B981]/10"
+            iconColor="text-[#10B981]"
+            title="Get Insights"
+            description="Receive negotiation tips and fairness scores"
+            step="03"
+            delay={0.4}
+            accentColor="#10B981"
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+// Premium Workflow Card Component
+function WorkflowCard({
+  icon: Icon,
+  iconBg,
+  iconColor,
+  title,
+  description,
+  step,
+  delay,
+  accentColor,
+}: {
+  icon: any;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  description: string;
+  step: string;
+  delay: number;
+  accentColor: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.5,
+        delay,
+        ease: [0.22, 0.61, 0.36, 1],
+      }}
+      whileHover={{
+        scale: 1.03,
+        y: -8,
+        transition: { duration: 0.3, ease: "easeOut" },
+      }}
+      className="group relative z-10"
+    >
+      <Card 
+        className="relative overflow-hidden p-6 bg-[#111827] border-[#1F2937] transition-all duration-300 group-hover:border-[#2563EB]"
+        style={{
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        {/* Hover glow effect */}
+        <div 
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+          style={{
+            boxShadow: `0 0 30px rgba(37, 99, 235, 0.2)`,
+          }}
+        />
+
+        {/* Step Number Badge */}
+        <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#0B1220] border border-[#1F2937] flex items-center justify-center group-hover:border-[#2563EB] transition-colors duration-300">
+          <span className="text-xs font-semibold text-[#9CA3AF] group-hover:text-[#2563EB] transition-colors duration-300">
+            {step}
+          </span>
+        </div>
+
+        {/* Icon */}
+        <motion.div
+          whileHover={{ 
+            scale: 1.15, 
+            y: -4,
+            transition: { duration: 0.2, ease: "easeOut" }
+          }}
+          className={`w-14 h-14 rounded-xl ${iconBg} flex items-center justify-center mb-5 shadow-lg`}
+          style={{
+            boxShadow: `0 4px 12px ${accentColor}20`,
+          }}
+        >
+          <Icon className={`w-7 h-7 ${iconColor}`} />
+        </motion.div>
+
+        {/* Content */}
+        <div>
+          <h3 className="font-semibold text-[#E5E7EB] mb-2 text-lg">
+            {title}
+          </h3>
+          <p className="text-sm text-[#9CA3AF] leading-relaxed">
+            {description}
+          </p>
+        </div>
+
+        {/* Subtle gradient overlay on hover */}
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-transparent group-hover:from-[#2563EB]/5 group-hover:to-transparent transition-all duration-500 pointer-events-none rounded-xl" />
+        
+        {/* Bottom accent line on hover */}
+        <motion.div
+          initial={{ scaleX: 0 }}
+          whileHover={{ scaleX: 1 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="absolute bottom-0 left-0 right-0 h-[2px] origin-left"
+          style={{
+            background: `linear-gradient(90deg, ${accentColor} 0%, transparent 100%)`,
+          }}
+        />
+      </Card>
+    </motion.div>
   );
 }

@@ -148,3 +148,41 @@ html {
 .glow-effect {
   box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
 }
+/* ===========================================
+   ADD THESE STYLES TO YOUR EXISTING globals.css
+   =========================================== */
+
+/* Additional Deep Sea Theme Colors for Landing Page */
+.dark {
+  /* Add these to your existing .dark section */
+  --color-ai-glow: 174 100% 42%;  /* Teal AI accent */
+  --color-highlight: 262 83% 58%; /* Purple highlight */
+}
+
+/* Glow Effects for Landing Page */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+}
+
+.glow-teal {
+  box-shadow: 0 0 20px rgba(0, 212, 168, 0.3);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+}
+
+/* Custom Scrollbar Enhancement for Dark Theme */
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--color-primary));
+  border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--color-secondary));
+}
+
+/* Smooth Transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

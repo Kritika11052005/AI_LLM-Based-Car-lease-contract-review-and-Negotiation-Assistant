@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import Particles from "@/components/Particles";
 import {
   Upload,
   Send,
@@ -71,7 +72,6 @@ To get started, upload your contract below!`,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ LOAD CHAT HISTORY FROM DATABASE
   const { data: conversations = [], refetch: refetchThreads } = useQuery({
     queryKey: ["negotiation-threads"],
     queryFn: async () => {
@@ -85,7 +85,6 @@ To get started, upload your contract below!`,
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Upload & process contract
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -137,7 +136,6 @@ To get started, upload your contract below!`,
       setIsUploading(false);
       toast.success("Contract analyzed successfully!");
 
-      // ✅ REFRESH CHAT HISTORY
       refetchThreads();
       setActiveConversationId(scriptResponse.data.thread_id);
     },
@@ -147,7 +145,6 @@ To get started, upload your contract below!`,
     },
   });
 
-  // Ask question
   const askMutation = useMutation({
     mutationFn: async (question: string) => {
       const response = await backendAPI.post(API_ENDPOINTS.NEGOTIATION.ASK(contractId!), {
@@ -169,13 +166,11 @@ To get started, upload your contract below!`,
     },
   });
 
-  // ✅ LOAD THREAD MESSAGES WHEN CLICKING ON HISTORY
   const loadThread = async (thread: Conversation) => {
     setActiveConversationId(thread.id);
     setThreadId(thread.id);
     setContractId(thread.contractId || null);
 
-    // Load messages from database
     const response = await api.get(`/negotiation/threads/${thread.id}/messages`);
     const { messages: threadMessages } = response.data;
 
@@ -244,7 +239,16 @@ To get started, upload your contract below!`,
       {
         id: "greeting",
         type: "text",
-        content: `👋 Hi! I'm your AI Lease Negotiation Assistant...`,
+        content: `👋 Hi! I'm your AI Lease Negotiation Assistant.
+
+I can help you:
+- Analyze your car lease/loan contracts
+- Identify red flags and unfair terms
+- Calculate fairness scores
+- Generate personalized negotiation scripts
+- Answer questions about your contract
+
+To get started, upload your contract below!`,
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -254,186 +258,234 @@ To get started, upload your contract below!`,
   };
 
   return (
-    <div className="flex h-[calc(100vh-120px)] gap-4">
-      {/* Left Sidebar - Chat History */}
-      <div className="w-64 flex flex-col gap-4">
-        <Button onClick={startNewChat} className="w-full">
-          <Plus className="w-4 h-4 mr-2" />
-          New Chat
-        </Button>
-
-        <Card className="flex-1 overflow-y-auto">
-          <div className="p-4 border-b border-border">
-            <h3 className="font-semibold text-sm">Chat History</h3>
-          </div>
-          <div className="divide-y divide-border">
-            {conversations.map((conv: Conversation) => (
-              <button
-                key={conv.id}
-                onClick={() => loadThread(conv)}
-                className={cn(
-                  "w-full text-left p-4 hover:bg-muted/50 transition-colors",
-                  activeConversationId === conv.id && "bg-muted"
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  <MessageSquare className="w-4 h-4 mt-1 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{conv.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {conv.lastMessage}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            ))}
-            {conversations.length === 0 && (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                No conversations yet
-              </div>
-            )}
-          </div>
-        </Card>
+    <div className="min-h-screen bg-[#0B1220] relative overflow-hidden">
+      {/* Particles Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <Particles
+          particleColors={["#2563EB", "#00D4A8", "#7C3AED"]}
+          particleCount={150}
+          particleSpread={8}
+          speed={0.05}
+          particleBaseSize={80}
+          moveParticlesOnHover={true}
+          alphaParticles={true}
+          disableRotation={false}
+          pixelRatio={1}
+        />
       </div>
 
-      {/* Main Chat Area */}
-      <Card className="flex-1 flex flex-col">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6" {...getRootProps()}>
-          <input {...getInputProps()} />
-          
-          {messages.map((msg) => (
-            <MessageRenderer key={msg.id} message={msg} />
-          ))}
+      {/* Main Content */}
+      <div className="relative z-10 px-6 py-6">
+        {/* Main Container with proper spacing */}
+        <div className="max-w-7xl mx-auto">
+          {/* Add extra top padding to move chat down and avoid sidebar toggle */}
+          <div className="pt-16">
+            <div className="flex gap-6 h-[calc(100vh-180px)]">
+              {/* Left Sidebar - Chat History */}
+              <div className="w-72 flex flex-col gap-4 flex-shrink-0">
+                <Button 
+                  onClick={startNewChat} 
+                  className="w-full h-11 bg-[#2563EB] hover:bg-[#1E40AF] transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Chat
+                </Button>
 
-          {/* Upload Prompt */}
-          {messages.length === 1 && !isUploading && (
-            <div className="flex justify-center">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
-              >
-                <Upload className="w-5 h-5" />
-                Upload Contract
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    handleFileUpload(e.target.files[0]);
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {/* Loading */}
-          {isUploading && (
-            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              <div className="flex-1">
-                <p className="font-medium">Processing your contract...</p>
-                <p className="text-sm text-muted-foreground">
-                  Extracting terms, analyzing fairness, generating script
-                </p>
+                <Card className="flex-1 overflow-hidden bg-[#111827]/90 backdrop-blur-md border-[#1F2937] rounded-2xl shadow-xl">
+                  <div className="p-5 border-b border-[#1F2937]">
+                    <h3 className="font-semibold text-sm text-[#E5E7EB]">Chat History</h3>
+                  </div>
+                  <div className="overflow-y-auto h-[calc(100%-61px)]">
+                    <div className="p-3 space-y-2">
+                      {conversations.map((conv: Conversation) => (
+                        <button
+                          key={conv.id}
+                          onClick={() => loadThread(conv)}
+                          className={cn(
+                            "w-full text-left p-3 rounded-lg hover:bg-[#1F2937] transition-all duration-200",
+                            activeConversationId === conv.id && "bg-[#1F2937] border border-[#2563EB]/30"
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <MessageSquare className="w-4 h-4 mt-1 text-[#2563EB] flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate text-[#E5E7EB]">
+                                {conv.title}
+                              </p>
+                              <p className="text-xs text-[#9CA3AF] truncate mt-1">
+                                {conv.lastMessage}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                      {conversations.length === 0 && (
+                        <div className="p-8 text-center text-sm text-[#9CA3AF]">
+                          No conversations yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
               </div>
+
+              {/* Main Chat Area */}
+              <Card className="flex-1 flex flex-col bg-[#111827]/90 backdrop-blur-md border-[#1F2937] rounded-2xl shadow-xl overflow-hidden">
+                {/* Messages Area */}
+                <div 
+                  className="flex-1 overflow-y-auto p-6" 
+                  {...getRootProps()}
+                >
+                  <input {...getInputProps()} />
+                  
+                  {/* Messages Container with max-width */}
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    {messages.map((msg) => (
+                      <MessageRenderer key={msg.id} message={msg} />
+                    ))}
+
+                    {/* Upload Prompt */}
+                    {messages.length === 1 && !isUploading && (
+                      <div className="flex justify-center pt-8">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-8 py-4 bg-gradient-to-r from-[#2563EB] to-[#1E40AF] text-white rounded-xl hover:opacity-90 transition-opacity flex items-center gap-3 shadow-lg"
+                        >
+                          <Upload className="w-5 h-5" />
+                          <span className="font-medium">Upload Contract</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Loading State */}
+                    {isUploading && (
+                      <div className="flex items-center gap-4 p-5 bg-[#1F2937] rounded-xl border border-[#2563EB]/30">
+                        <Loader2 className="w-6 h-6 animate-spin text-[#2563EB] flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="font-medium text-[#E5E7EB]">Processing your contract...</p>
+                          <p className="text-sm text-[#9CA3AF] mt-1">
+                            Extracting terms, analyzing fairness, generating script
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {askMutation.isPending && (
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2563EB] to-[#00D4A8] flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 bg-[#1F2937] rounded-2xl rounded-tl-sm p-5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#2563EB]" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+
+                {/* Input Area */}
+                <div className="border-t border-[#1F2937] p-5 bg-[#0B1220]/50 backdrop-blur-sm">
+                  <div className="max-w-4xl mx-auto">
+                    <div className="flex items-end gap-3">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="h-11 w-11 flex-shrink-0 border-[#1F2937] hover:bg-[#1F2937] hover:border-[#2563EB]/50 transition-all"
+                        title="Upload contract"
+                      >
+                        <Upload className="w-5 h-5" />
+                      </Button>
+                      
+                      {/* Hidden file input for upload button */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleFileUpload(e.target.files[0]);
+                          }
+                        }}
+                      />
+                      
+                      <div className="flex-1 bg-[#1F2937] border border-[#2563EB]/20 rounded-xl px-4 py-3 focus-within:border-[#2563EB]/50 transition-colors">
+                        <Input
+                          placeholder={
+                            contractId
+                              ? "Ask about your contract..."
+                              : "Upload a contract first..."
+                          }
+                          value={inputMessage}
+                          onChange={(e) => setInputMessage(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSend();
+                            }
+                          }}
+                          disabled={!contractId || askMutation.isPending}
+                          className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 p-0 text-[#E5E7EB] placeholder:text-[#6B7280]"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleSend}
+                        disabled={!inputMessage.trim() || !contractId || askMutation.isPending}
+                        size="icon"
+                        className="h-11 w-11 flex-shrink-0 bg-[#2563EB] hover:bg-[#1E40AF] disabled:opacity-50 transition-all"
+                        title="Send message"
+                      >
+                        <Send className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
             </div>
-          )}
-
-          {askMutation.isPending && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div className="flex-1 bg-muted rounded-lg p-4">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="border-t border-border p-4">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-            >
-              <Upload className="w-4 h-4" />
-            </Button>
-            <Input
-              placeholder={
-                contractId
-                  ? "Ask about your contract..."
-                  : "Upload a contract first..."
-              }
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              disabled={!contractId || askMutation.isPending}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!inputMessage.trim() || !contractId || askMutation.isPending}
-              size="icon"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
 
-// Message Renderer Component (shortened for brevity - use same as before)
+// Message Renderer Component
 function MessageRenderer({ message }: { message: ChatMessage }) {
-  // ... same implementation as your current file
-  // (keeping the existing MessageRenderer code)
-  
   if (message.type === "user") {
     return (
-      <div className="flex justify-end gap-3">
-        <div className="flex flex-col items-end max-w-[80%]">
-          <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm p-4 shadow-sm">
-            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+      <div className="flex justify-end gap-4">
+        <div className="flex flex-col items-end max-w-[70%]">
+          <div className="bg-gradient-to-r from-[#2563EB] to-[#1E40AF] text-white rounded-2xl rounded-tr-sm p-4 shadow-lg">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 px-2">
+          <p className="text-xs text-[#6B7280] mt-2 px-2">
             {formatDateTime(message.timestamp)}
           </p>
         </div>
-        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-          <span className="text-xs font-bold text-primary-foreground">You</span>
+        <div className="w-10 h-10 rounded-full bg-[#2563EB] flex items-center justify-center flex-shrink-0 shadow-lg">
+          <span className="text-xs font-bold text-white">You</span>
         </div>
       </div>
     );
   }
 
-  // For text messages
+  // AI messages
   return (
-    <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
-        <Sparkles className="w-4 h-4 text-white" />
+    <div className="flex items-start gap-4">
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2563EB] to-[#00D4A8] flex items-center justify-center flex-shrink-0 shadow-lg">
+        <Sparkles className="w-5 h-5 text-white" />
       </div>
-      <div className="flex-1 max-w-[80%]">
-        <div className="bg-muted/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 shadow-sm border border-border/50">
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+      <div className="flex-1 max-w-[70%]">
+        <div className="bg-[#1F2937] border border-[#2563EB]/10 rounded-2xl rounded-tl-sm p-5 shadow-md">
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#E5E7EB]">
             {message.content}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1 px-2">
+        <p className="text-xs text-[#6B7280] mt-2 px-2">
           {formatDateTime(message.timestamp)}
         </p>
       </div>
