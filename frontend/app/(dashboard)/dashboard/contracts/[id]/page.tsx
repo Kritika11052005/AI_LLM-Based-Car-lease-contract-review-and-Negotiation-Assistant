@@ -1,13 +1,15 @@
 "use client";
-
+// app/dashboard/contracts/[id]/page.tsx
+import type { LucideIcon } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
-import { Contract } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { motion } from "framer-motion";
 import { FairnessScoreCard } from "@/components/contract/FairnessScoreCard";
 import { PriceEstimation } from "@/components/contract/PriceEstimation";
 import {
@@ -23,44 +25,107 @@ import {
   Gauge,
   AlertTriangle,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
+import type { Contract } from "@/types/contract";
 
+// ── animation variants ─────────────────────────────────────────────────────────
+const pageVariants = {
+  hidden:  { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+};
+
+const sectionVariants = {
+  hidden:  { opacity: 0, y: 30 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0,
+    transition: { duration: 0.55, ease: "easeOut", delay: i * 0.12 },
+  }),
+};
+
+// ── metric card ────────────────────────────────────────────────────────────────
+function MetricCard({
+  icon: Icon, label, value, gradient, iconColor, index,
+}: {
+  icon: LucideIcon;   // ← was React.ElementType
+  label: string;
+  value: string;
+  gradient: string;
+  iconColor: string;
+  index: number;
+}) {
+  return (
+    <motion.div
+      custom={index}
+      variants={sectionVariants}
+      initial="hidden"
+      animate="visible"
+      whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+    >
+      <Card
+        className={`p-5 bg-gradient-to-br ${gradient} border-white/8 backdrop-blur-sm
+          hover:shadow-[0_4px_32px_rgba(0,0,0,0.4)] hover:border-white/12 transition-all duration-200`}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <motion.div whileHover={{ y: -2, rotate: -4 }} transition={{ duration: 0.2 }}>
+            <Icon className={`w-5 h-5 ${iconColor}`} />
+          </motion.div>
+          <p className="text-xs text-slate-400">{label}</p>
+        </div>
+        <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ── section wrapper ────────────────────────────────────────────────────────────
+function Section({
+  children, index,
+}: {
+  children: React.ReactNode;
+  index: number;
+}) {
+  return (
+    <motion.div
+      custom={index}
+      variants={sectionVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ── main page ──────────────────────────────────────────────────────────────────
 export default function ContractDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params     = useParams();
+  const router     = useRouter();
   const contractId = params.id as string;
 
-  const {
-    data: contract,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data: contract, isLoading, error } = useQuery<Contract>({
     queryKey: ["contract", contractId],
     queryFn: async () => {
-      const response = await api.get(
-        API_ENDPOINTS.CONTRACTS.GET(contractId)
-      );
-      return response.data;
+      const r = await api.get(API_ENDPOINTS.CONTRACTS.GET(contractId));
+      return r.data;
     },
   });
 
-  if (isLoading) {
-    return <ContractDetailSkeleton />;
-  }
+  // ── loading ────────────────────────────────────────────────────────────────
+  if (isLoading) return <ContractDetailSkeleton />;
 
+  // ── error ──────────────────────────────────────────────────────────────────
   if (error || !contract) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center">
+        <Card className="max-w-md w-full p-8 text-center border-white/8 bg-slate-900/80">
           <div className="mx-auto w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-            <FileText className="w-6 h-6 text-red-500" />
+            <FileText className="w-6 h-6 text-red-400" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">📄 Contract Not Found</h1>
-          <p className="text-muted-foreground mb-6">
+          <h1 className="text-xl font-bold mb-2 text-white">Contract Not Found</h1>
+          <p className="text-slate-400 text-sm mb-6">
             This contract doesn&apos;t exist or you don&apos;t have access to it.
           </p>
-          <Button onClick={() => router.push("/dashboard/contracts")}>
+          <Button onClick={() => router.push("/dashboard/contracts")} variant="outline" className="border-white/10">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Contracts
           </Button>
@@ -69,428 +134,334 @@ export default function ContractDetailPage() {
     );
   }
 
-  const sla = contract.sla;
+  const sla     = contract.sla;
   const vehicle = contract.vehicle;
+  const hasVehicleInfo = vehicle && (vehicle.year || vehicle.make || vehicle.model);
+  const vinOnly = vehicle && !hasVehicleInfo && vehicle.vin;
+
+  // dealer price for the price bar marker
+  const dealerPrice =
+    sla?.capCost != null ? Number(sla.capCost) :
+    sla?.msrp    != null ? Number(sla.msrp)    : null;
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/dashboard/contracts")}
-              className="mb-2 -ml-2"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            <h1 className="text-3xl font-bold mb-2">Contract Analysis</h1>
-            {vehicle && (vehicle.year || vehicle.make || vehicle.model) && (
-              <p className="text-xl text-muted-foreground">
-                {vehicle.year} {vehicle.make} {vehicle.model}
-                {vehicle.trim && ` ${vehicle.trim}`}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="secondary" className="text-sm">
-              {contract.contractType || "Lease"}
-            </Badge>
-            <Badge variant="outline" className="text-sm">
-              {contract.docStatus || "Processing"}
-            </Badge>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Download
-            </Button>
-            <Button variant="outline" size="sm">
-              <Share2 className="w-4 h-4 mr-2" />
-              Share
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => router.push(`/dashboard/negotiate/${contractId}`)}
-            >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Start Negotiation
-            </Button>
-          </div>
-        </div>
-
-        {/* Fairness Score Section */}
-        <div>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-primary" />
-            Fairness Analysis
-          </h2>
-          <FairnessScoreCard contractId={contractId} />
-        </div>
-
-        {/* Price Estimation Section */}
-        <div>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-primary" />
-            Price & Market Analysis
-          </h2>
-          <PriceEstimation contractId={contractId} />
-        </div>
-
-        {/* Vehicle Info Card */}
-        {vehicle ? (
-          vehicle.make || vehicle.model || vehicle.year ? (
-            // Has vehicle data - show full card with all available fields
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Car className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="text-xl font-semibold">Vehicle Information</h2>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {vehicle.make && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Make</p>
-                    <p className="font-medium">{vehicle.make}</p>
-                  </div>
-                )}
-                {vehicle.model && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Model</p>
-                    <p className="font-medium">{vehicle.model}</p>
-                  </div>
-                )}
-                {vehicle.year && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Year</p>
-                    <p className="font-medium">{vehicle.year}</p>
-                  </div>
-                )}
-                {vehicle.trim && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Trim</p>
-                    <p className="font-medium">{vehicle.trim}</p>
-                  </div>
-                )}
-                {vehicle.vin && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">VIN</p>
-                    <p className="font-medium font-mono text-sm">
-                      {vehicle.vin}
-                    </p>
-                  </div>
-                )}
-                {vehicle.bodyClass && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Body Type
-                    </p>
-                    <p className="font-medium">{vehicle.bodyClass}</p>
-                  </div>
-                )}
-                {vehicle.engine && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Engine</p>
-                    <p className="font-medium">{vehicle.engine}</p>
-                  </div>
-                )}
-                {vehicle.drivetrain && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Drivetrain
-                    </p>
-                    <p className="font-medium">{vehicle.drivetrain}</p>
-                  </div>
-                )}
-                {vehicle.fuelType && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Fuel Type
-                    </p>
-                    <p className="font-medium">{vehicle.fuelType}</p>
-                  </div>
-                )}
-                {vehicle.colorExt && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Exterior Color
-                    </p>
-                    <p className="font-medium">{vehicle.colorExt}</p>
-                  </div>
-                )}
-                {vehicle.colorInt && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Interior Color
-                    </p>
-                    <p className="font-medium">{vehicle.colorInt}</p>
-                  </div>
-                )}
-                {vehicle.odometerMiles && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Odometer
-                    </p>
-                    <p className="font-medium">
-                      {vehicle.odometerMiles.toLocaleString()} miles
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          ) : (
-            // Only VIN, no other data - show warning
-            <Card className="p-6 border-yellow-500/30 bg-yellow-500/5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-yellow-500/10 rounded-lg">
-                  <Car className="w-5 h-5 text-yellow-500" />
-                </div>
-                <h2 className="text-xl font-semibold">Vehicle Information</h2>
-              </div>
-
-              {/* VIN Display */}
-              {vehicle.vin && (
-                <div className="mb-4">
-                  <p className="text-sm text-muted-foreground mb-1">VIN</p>
-                  <p className="font-medium font-mono text-sm">{vehicle.vin}</p>
-                </div>
-              )}
-
-              {/* Warning */}
-              <div className="flex items-start gap-3 p-4 bg-yellow-500/10 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                    VIN Not Found
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    This VIN may not exist in the database or vehicle data could
-                    not be retrieved
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )
-        ) : null}
-
-        {/* Financial Terms */}
-        {sla && (
-          <>
-            {/* Key Financial Metrics */}
-            <div className="grid md:grid-cols-4 gap-4">
-              <Card className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <DollarSign className="w-5 h-5 text-green-500" />
-                  <p className="text-sm text-muted-foreground">
-                    Monthly Payment
-                  </p>
-                </div>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(Number(sla.monthlyPayment) || 0)}
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <Gauge className="w-5 h-5 text-blue-500" />
-                  <p className="text-sm text-muted-foreground">APR</p>
-                </div>
-                <p className="text-2xl font-bold">
-                  {sla.aprPercent
-                    ? `${Number(sla.aprPercent).toFixed(2)}%`
-                    : "N/A"}
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="w-5 h-5 text-purple-500" />
-                  <p className="text-sm text-muted-foreground">Term</p>
-                </div>
-                <p className="text-2xl font-bold">
-                  {sla.termMonths ? `${sla.termMonths} months` : "N/A"}
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-5 h-5 text-orange-500" />
-                  <p className="text-sm text-muted-foreground">
-                    Annual Mileage
-                  </p>
-                </div>
-                <p className="text-2xl font-bold">
-                  {sla.mileageAllowanceYr
-                    ? `${sla.mileageAllowanceYr.toLocaleString()} km`
-                    : "N/A"}
-                </p>
-              </Card>
-            </div>
-
-            {/* Detailed Terms */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Payment Details */}
-              <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-primary" />
-                  Payment Details
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Down Payment
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(Number(sla.downPayment) || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Monthly Payment
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(Number(sla.monthlyPayment) || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Residual Value
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(Number(sla.residualValue) || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-muted-foreground">
-                      Purchase Option
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(Number(sla.purchaseOptionPrice) || 0)}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Mileage & Fees */}
-              <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Gauge className="w-5 h-5 text-primary" />
-                  Mileage & Fees
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Annual Mileage
-                    </span>
-                    <span className="font-medium">
-                      {sla.mileageAllowanceYr
-                        ? `${sla.mileageAllowanceYr.toLocaleString()} km`
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Overage Fee
-                    </span>
-                    <span className="font-medium">
-                      {sla.mileageOverageFee
-                        ? `₹${Number(sla.mileageOverageFee).toFixed(2)}/km`
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">
-                      Early Termination
-                    </span>
-                    <span className="font-medium">
-                      {sla.earlyTerminationFee
-                        ? formatCurrency(Number(sla.earlyTerminationFee))
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-muted-foreground">
-                      Disposition Fee
-                    </span>
-                    <span className="font-medium">
-                      {sla.dispositionFee
-                        ? formatCurrency(Number(sla.dispositionFee))
-                        : "N/A"}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Additional Terms */}
-            <Card className="p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                Additional Terms
-              </h3>
-              <div className="grid md:grid-cols-3 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Maintenance Responsibility
-                  </p>
-                  <p className="font-medium">
-                    {sla.maintenanceResp || "Not specified"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Warranty Coverage
-                  </p>
-                  <p className="font-medium">
-                    {sla.warrantySummary || "Not specified"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Late Fee Policy
-                  </p>
-                  <p className="font-medium">
-                    {sla.lateFeePolicy || "Not specified"}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </>
-        )}
-
-        {/* No SLA Data */}
-        {!sla && (
-          <Card className="p-6 border-yellow-500/30 bg-yellow-500/5">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                  No Contract Terms Found
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Contract terms haven&apos;t been extracted yet. Please wait for the
-                  analysis to complete.
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
+    <>
+      {/* ── Background ────────────────────────────────────────────────────── */}
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <div style={{ background: "radial-gradient(circle at 20% 30%, #111827, #0B1220)" }}
+          className="absolute inset-0" />
+        {/* floating blobs */}
+        <motion.div
+          className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(37,99,235,0.07) 0%, transparent 70%)" }}
+          animate={{ x: [0, 20, 0], y: [0, 15, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-[10%] right-[-5%] w-[400px] h-[400px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(0,212,168,0.06) 0%, transparent 70%)" }}
+          animate={{ x: [0, -15, 0], y: [0, -20, 0] }}
+          transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+        />
       </div>
-    </div>
+
+      {/* ── Page ──────────────────────────────────────────────────────────── */}
+      <motion.div
+        className="min-h-screen p-4 md:p-8"
+        variants={pageVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <div className="max-w-7xl mx-auto space-y-6">
+
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <Section index={0}>
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push("/dashboard/contracts")}
+                  className="mb-2 -ml-2 text-slate-400 hover:text-white hover:bg-white/5"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <h1 className="text-3xl font-black text-white tracking-tight">
+                  Contract Analysis
+                </h1>
+                {hasVehicleInfo && (
+                  <p className="text-lg text-slate-400 mt-1">
+                    {vehicle.year} {vehicle.make} {vehicle.model}
+                    {vehicle.trim && ` ${vehicle.trim}`}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-white/5 border border-white/10 text-slate-300 text-xs">
+                  {contract.contractType || "Lease"}
+                </Badge>
+                <Badge className="bg-white/5 border border-white/10 text-slate-300 text-xs">
+                  {contract.docStatus || "Processing"}
+                </Badge>
+                <Button variant="outline" size="sm"
+                  className="border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-all">
+                  <Download className="w-4 h-4 mr-2" />Download
+                </Button>
+                <Button variant="outline" size="sm"
+                  className="border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-all">
+                  <Share2 className="w-4 h-4 mr-2" />Share
+                </Button>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Button size="sm"
+                    onClick={() => router.push(`/dashboard/negotiate/${contractId}`)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Start Negotiation
+                  </Button>
+                </motion.div>
+              </div>
+            </div>
+          </Section>
+
+          {/* ── Key Metrics (4 cards) ────────────────────────────────────── */}
+          {sla && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard
+                index={1} icon={DollarSign} iconColor="text-emerald-400"
+                label="Monthly Payment" gradient="from-emerald-500/10 to-green-500/5"
+                value={formatCurrency(Number(sla.monthlyPayment) || 0)}
+              />
+              <MetricCard
+                index={2} icon={Gauge} iconColor="text-blue-400"
+                label="APR" gradient="from-blue-500/10 to-cyan-500/5"
+                value={sla.aprPercent ? `${Number(sla.aprPercent).toFixed(2)}%` : "N/A"}
+              />
+              <MetricCard
+                index={3} icon={Calendar} iconColor="text-purple-400"
+                label="Term" gradient="from-purple-500/10 to-pink-500/5"
+                value={sla.termMonths ? `${sla.termMonths} mo` : "N/A"}
+              />
+              <MetricCard
+                index={4} icon={TrendingUp} iconColor="text-orange-400"
+                label="Annual Mileage" gradient="from-orange-500/10 to-red-500/5"
+                value={sla.mileageAllowanceYr
+                  ? `${sla.mileageAllowanceYr.toLocaleString()} km`
+                  : "N/A"}
+              />
+            </div>
+          )}
+
+          {/* ── Fairness Analysis ────────────────────────────────────────── */}
+          <Section index={5}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                <TrendingUp className="w-5 h-5 text-violet-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Fairness Analysis</h2>
+            </div>
+            <FairnessScoreCard contractId={contractId} />
+          </Section>
+
+          {/* ── Price & Market ───────────────────────────────────────────── */}
+          <Section index={6}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <DollarSign className="w-5 h-5 text-blue-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Price & Market Analysis</h2>
+            </div>
+            <PriceEstimation contractId={contractId} dealerPrice={dealerPrice} />
+          </Section>
+
+          {/* ── Vehicle Info ─────────────────────────────────────────────── */}
+          {hasVehicleInfo ? (
+            <Section index={7}>
+              <Card className="p-6 border-white/8 bg-slate-900/40 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                    <Car className="w-5 h-5 text-slate-300" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-white">Vehicle Information</h2>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                  {[
+                    { label: "Make",           value: vehicle.make },
+                    { label: "Model",          value: vehicle.model },
+                    { label: "Year",           value: vehicle.year?.toString() },
+                    { label: "Trim",           value: vehicle.trim },
+                    { label: "VIN",            value: vehicle.vin, mono: true },
+                    { label: "Body Type",      value: vehicle.bodyClass },
+                    { label: "Engine",         value: vehicle.engine },
+                    { label: "Drivetrain",     value: vehicle.drivetrain },
+                    { label: "Fuel Type",      value: vehicle.fuelType },
+                    { label: "Exterior Color", value: vehicle.colorExt },
+                    { label: "Interior Color", value: vehicle.colorInt },
+                    { label: "Odometer",       value: vehicle.odometerMiles
+                        ? `${Number(vehicle.odometerMiles).toLocaleString()} miles`
+                        : undefined },
+                  ]
+                    .filter((f) => f.value)
+                    .map((f, i) => (
+                      <motion.div
+                        key={f.label}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.05 * i }}
+                        className="group p-3 rounded-xl hover:bg-white/4 transition-colors"
+                      >
+                        <p className="text-xs text-slate-500 mb-1">{f.label}</p>
+                        <p className={`text-sm font-semibold text-slate-200 ${f.mono ? "font-mono" : ""}`}>
+                          {f.value}
+                        </p>
+                      </motion.div>
+                    ))}
+                </div>
+              </Card>
+            </Section>
+          ) : vinOnly ? (
+            <Section index={7}>
+              <Card className="p-6 border-amber-500/20 bg-amber-500/5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <Car className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-white">Vehicle Information</h2>
+                </div>
+                {vehicle.vin && (
+                  <div className="mb-4 p-3 rounded-xl bg-white/4">
+                    <p className="text-xs text-slate-500 mb-1">VIN</p>
+                    <p className="text-sm font-mono text-slate-200">{vehicle.vin}</p>
+                  </div>
+                )}
+                <div className="flex items-start gap-3 p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-400 mb-1">VIN Not Decoded</p>
+                    <p className="text-xs text-slate-400">
+                      Vehicle data couldn&apos;t be retrieved. Run the market enrichment endpoint
+                      to decode this VIN via MarketCheck.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </Section>
+          ) : null}
+
+          {/* ── Financial Terms ──────────────────────────────────────────── */}
+          {sla && (
+            <>
+              <Section index={8}>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Payment Details */}
+                  <Card className="p-6 border-white/8 bg-slate-900/40">
+                    <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+                      <DollarSign className="w-4 h-4 text-emerald-400" />
+                      Payment Details
+                    </h3>
+                    <div className="space-y-0">
+                      {[
+                        { label: "Down Payment",    value: formatCurrency(Number(sla.downPayment) || 0) },
+                        { label: "Monthly Payment", value: formatCurrency(Number(sla.monthlyPayment) || 0) },
+                        { label: "Residual Value",  value: formatCurrency(Number(sla.residualValue) || 0) },
+                        { label: "Purchase Option", value: formatCurrency(Number(sla.purchaseOptionPrice) || 0) },
+                      ].map((row, i) => (
+                        <div key={i}
+                          className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors px-1 rounded">
+                          <span className="text-xs text-slate-500">{row.label}</span>
+                          <span className="text-sm font-semibold text-slate-200">{row.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {/* Mileage & Fees */}
+                  <Card className="p-6 border-white/8 bg-slate-900/40">
+                    <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+                      <Gauge className="w-4 h-4 text-blue-400" />
+                      Mileage & Fees
+                    </h3>
+                    <div className="space-y-0">
+                      {[
+                        { label: "Annual Mileage",    value: sla.mileageAllowanceYr ? `${sla.mileageAllowanceYr.toLocaleString()} km` : "N/A" },
+                        { label: "Overage Fee",       value: sla.mileageOverageFee ? `₹${Number(sla.mileageOverageFee).toFixed(2)}/km` : "N/A" },
+                        { label: "Early Termination", value: sla.earlyTerminationFee ? formatCurrency(Number(sla.earlyTerminationFee)) : "N/A" },
+                        { label: "Disposition Fee",   value: sla.dispositionFee ? formatCurrency(Number(sla.dispositionFee)) : "N/A" },
+                      ].map((row, i) => (
+                        <div key={i}
+                          className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors px-1 rounded">
+                          <span className="text-xs text-slate-500">{row.label}</span>
+                          <span className="text-sm font-semibold text-slate-200">{row.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+              </Section>
+
+              {/* Additional Terms */}
+              <Section index={9}>
+                <Card className="p-6 border-white/8 bg-slate-900/40">
+                  <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+                    <FileText className="w-4 h-4 text-slate-400" />
+                    Additional Terms
+                  </h3>
+                  <div className="grid md:grid-cols-3 gap-6">
+                    {[
+                      { label: "Maintenance",  value: sla.maintenanceResp },
+                      { label: "Warranty",     value: sla.warrantySummary },
+                      { label: "Late Fee",     value: sla.lateFeePolicy },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <p className="text-xs text-slate-500 mb-1.5">{item.label}</p>
+                        <p className="text-sm text-slate-300">{item.value || "Not specified"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </Section>
+            </>
+          )}
+
+          {/* ── No SLA ──────────────────────────────────────────────────── */}
+          {!sla && (
+            <Section index={8}>
+              <Card className="p-6 border-amber-500/20 bg-amber-500/5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-400 mb-1">
+                      No Contract Terms Found
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Contract terms haven&apos;t been extracted yet. Please wait for analysis to complete.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </Section>
+          )}
+
+        </div>
+      </motion.div>
+    </>
   );
 }
 
+// ── skeleton ───────────────────────────────────────────────────────────────────
 function ContractDetailSkeleton() {
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        <Skeleton className="h-32 w-full" />
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-64 w-full" />
+        <Skeleton className="h-28 w-full bg-white/5 rounded-2xl" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 bg-white/5 rounded-2xl" />
+          ))}
+        </div>
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-64 w-full bg-white/5 rounded-2xl" />
         ))}
       </div>
     </div>

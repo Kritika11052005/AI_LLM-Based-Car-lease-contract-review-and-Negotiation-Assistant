@@ -1,248 +1,243 @@
-// frontend/components/contract/PriceEstimation.tsx
-/**
- * Price Estimation Component
- * Shows fair market value and lease term analysis
- */
+"use client";
+// components/contract/PriceEstimation.tsx
+// Calls POST /api/market/enrich/{id} — MarketCheck price + fairness pipeline
 
 import { useQuery } from "@tanstack/react-query";
 import { backendAPI } from "@/lib/api";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  CheckCircle,
-  Info,
-} from "lucide-react";
+import { motion } from "framer-motion";
+import { DollarSign, TrendingUp, TrendingDown, Info, BarChart2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import type { EnrichContractResponse } from "@/types/contract";
 
-interface PriceEstimationProps {
+interface Props {
   contractId: string;
+  dealerPrice?: number | null; // passed from ContractDetailPage via sla.capCost / sla.msrp
 }
 
-export function PriceEstimation({ contractId }: PriceEstimationProps) {
-  const { data: priceData, isLoading, error } = useQuery({
-    queryKey: ["price-analysis", contractId],
+// ── over/under badge ───────────────────────────────────────────────────────────
+function DeltaBadge({ pct }: { pct: number }) {
+  const over = pct > 0;
+  return (
+    <motion.span
+      initial={{ scale: 0.7, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.6 }}
+      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
+        over
+          ? "bg-red-500/15 text-red-400 border-red-500/30"
+          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+      }`}
+    >
+      {over ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {over ? "+" : ""}{pct.toFixed(1)}%{" "}
+      {over ? "Overpriced" : "Below Market"}
+    </motion.span>
+  );
+}
+
+// ── horizontal price bar ───────────────────────────────────────────────────────
+function PriceBar({
+  low,
+  high,
+  predicted,
+  dealer,
+}: {
+  low: number;
+  high: number;
+  predicted: number;
+  dealer: number | null;
+}) {
+  const range = high - low || 1;
+
+  const pctOf = (v: number) => Math.max(0, Math.min(100, ((v - low) / range) * 100));
+  const predictedPct = pctOf(predicted);
+  const dealerPct    = dealer != null ? pctOf(dealer) : null;
+
+  return (
+    <div className="mt-6 mb-2">
+      {/* labels */}
+      <div className="flex justify-between text-xs text-slate-500 mb-2">
+        <span>Market Low<br /><span className="text-slate-300 font-semibold">{formatCurrency(low)}</span></span>
+        <span className="text-center">Market Avg<br /><span className="text-slate-300 font-semibold">{formatCurrency(predicted)}</span></span>
+        <span className="text-right">Market High<br /><span className="text-slate-300 font-semibold">{formatCurrency(high)}</span></span>
+      </div>
+
+      {/* track */}
+      <div className="relative h-3 rounded-full bg-white/6 overflow-visible">
+        {/* filled range */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500/30 via-amber-500/30 to-red-500/30" />
+
+        {/* predicted avg marker */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-0.5 h-5 bg-white/40 rounded-full"
+          style={{ left: `${predictedPct}%` }}
+        />
+
+        {/* dealer price marker — animates in */}
+        {dealerPct != null && (
+          <motion.div
+            className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center"
+            style={{ left: `${dealerPct}%` }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.5 }}
+          >
+            <div className="w-3 h-3 rounded-full bg-violet-400 border-2 border-white shadow-[0_0_8px_rgba(167,139,250,0.8)] -translate-y-0.5" />
+            <span className="absolute top-5 text-[10px] text-violet-300 font-bold whitespace-nowrap">
+              Dealer {formatCurrency(dealer!)}
+            </span>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── main export ────────────────────────────────────────────────────────────────
+export function PriceEstimation({ contractId, dealerPrice }: Props) {
+  const { data, isLoading, error } = useQuery<EnrichContractResponse>({
+    queryKey: ["market-enrich", contractId],
     queryFn: async () => {
-      const response = await backendAPI.get(`api/price/contract-price-analysis/${contractId}`);
-      return response.data;
+      const r = await backendAPI.post(`api/market/enrich/${contractId}`);
+      return r.data;
     },
   });
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <Skeleton className="h-64 w-full" />
+      <Card className="p-6 border-white/8 bg-slate-900/60">
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="w-8 h-8 rounded-full bg-white/5" />
+          <Skeleton className="h-5 w-48 bg-white/5" />
+        </div>
+        <Skeleton className="h-40 w-full bg-white/5 rounded-xl" />
       </Card>
     );
   }
 
-  if (error || !priceData?.success) {
+  if (error || !data?.market_data?.predicted_price) {
     return (
-      <Card className="p-6 border-yellow-500/30 bg-yellow-500/5">
-        <div className="flex items-center gap-2 text-yellow-600">
-          <Info className="w-5 h-5" />
-          <p className="text-sm">Price analysis unavailable for this contract</p>
+      <Card className="p-6 border-amber-500/20 bg-amber-500/5">
+        <div className="flex items-center gap-3 text-amber-400">
+          <Info className="w-5 h-5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Market data unavailable</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              MarketCheck couldn&apos;t retrieve pricing for this vehicle.
+              Contract fairness was still scored using term benchmarks.
+            </p>
+          </div>
         </div>
       </Card>
     );
   }
 
-  const { price_estimate, lease_analysis, comparison } = priceData;
+  const { market_data, fairness_breakdown, vehicle_data } = data;
+  const predicted = market_data.predicted_price!;
+  const low       = market_data.price_range?.low ?? predicted * 0.85;
+  const high      = market_data.price_range?.high ?? predicted * 1.15;
+
+  // dealer price: prefer prop, fall back to anything reasonable
+  const dealer = dealerPrice ?? null;
+
+  // over/under percent vs predicted
+  const deltaPct =
+    dealer != null ? ((dealer - predicted) / predicted) * 100 : null;
+
+  const vehicleLabel = vehicle_data
+    ? [vehicle_data.year, vehicle_data.make, vehicle_data.model, vehicle_data.trim]
+        .filter(Boolean)
+        .join(" ")
+    : null;
 
   return (
-    <div className="space-y-6">
-      {/* Fair Market Value */}
-      <Card className="p-6 bg-gradient-to-br from-blue-500/5 to-cyan-500/5">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-blue-500/10 rounded-lg">
-            <DollarSign className="w-5 h-5 text-blue-500" />
+    <motion.div
+      className="space-y-4"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: "easeOut" }}
+    >
+      {/* ── Main price card ──────────────────────────────────────────────── */}
+      <Card className="p-6 border-white/8 bg-gradient-to-br from-blue-500/8 to-cyan-500/5 backdrop-blur-sm">
+        <div className="flex items-start justify-between flex-wrap gap-3 mb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <BarChart2 className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white text-sm">Market Price Analysis</h3>
+              {vehicleLabel && (
+                <p className="text-xs text-slate-500 mt-0.5">{vehicleLabel}</p>
+              )}
+            </div>
           </div>
-          <h3 className="text-lg font-semibold">Fair Market Value</h3>
+          {deltaPct != null && <DeltaBadge pct={deltaPct} />}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">MSRP Range</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(price_estimate.msrp_low)} - {formatCurrency(price_estimate.msrp_high)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Average MSRP</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(price_estimate.msrp_avg)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Current Value</p>
-            <p className="text-lg font-semibold text-primary">
-              {formatCurrency(price_estimate.fair_market_value)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {(price_estimate.depreciation_rate * 100).toFixed(0)}% depreciation
-            </p>
-          </div>
-        </div>
+        {/* price bar */}
+        <PriceBar low={low} high={high} predicted={predicted} dealer={dealer} />
 
-        <div className="mt-4 p-3 bg-background/50 rounded-lg">
-          <p className="text-sm text-muted-foreground">
-            <strong>Data Sources:</strong> {price_estimate.data_sources.join(", ")}
-          </p>
+        {/* three-col stat row */}
+        <div className="grid grid-cols-3 gap-4 mt-8 pt-4 border-t border-white/6">
+          <Stat label="Market Low"  value={formatCurrency(low)}       color="text-emerald-400" />
+          <Stat label="Predicted"   value={formatCurrency(predicted)}  color="text-blue-400" center />
+          <Stat label="Market High" value={formatCurrency(high)}       color="text-red-400" right />
         </div>
       </Card>
 
-      {/* Payment Comparison */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-purple-500/10 rounded-lg">
-            <TrendingUp className="w-5 h-5 text-purple-500" />
-          </div>
-          <h3 className="text-lg font-semibold">Payment Analysis</h3>
-        </div>
+      {/* ── Fairness breakdown scores ─────────────────────────────────────── */}
+      {fairness_breakdown && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className="p-5 border-white/8 bg-slate-900/40">
+            <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+              <DollarSign className="w-4 h-4 text-cyan-400" />
+              Fairness Sub-Scores
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <SubScore label="Price"  score={fairness_breakdown.price_score} color="text-violet-400" />
+              <SubScore label="APR"    score={fairness_breakdown.apr_score}   color="text-blue-400" />
+              <SubScore label="Fees"   score={fairness_breakdown.fees_score}  color="text-cyan-400" />
+              <SubScore label="Term"   score={fairness_breakdown.term_score}  color="text-teal-400" />
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/6 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Blended Fairness Score</span>
+              <span className="text-lg font-black text-white">
+                {fairness_breakdown.final_score.toFixed(1)}
+                <span className="text-xs text-slate-500 font-normal ml-1">/ 100</span>
+              </span>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Your Monthly Payment</p>
-            <p className="text-3xl font-bold">
-              {formatCurrency(comparison.actual_monthly_payment)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Expected Payment</p>
-            <p className="text-3xl font-bold text-muted-foreground">
-              {formatCurrency(comparison.expected_monthly_payment)}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between p-4 rounded-lg bg-muted/50">
-          <div className="flex items-center gap-2">
-            {comparison.difference > 0 ? (
-              <TrendingUp className="w-5 h-5 text-red-500" />
-            ) : (
-              <TrendingDown className="w-5 h-5 text-green-500" />
-            )}
-            <span className="font-semibold">
-              {comparison.difference > 0 ? "Overpaying" : "Good Deal"}:{" "}
-              {formatCurrency(Math.abs(comparison.difference))}/month
-            </span>
-          </div>
-          <Badge
-            className={
-              comparison.verdict === "Fair"
-                ? "bg-green-500 text-white"
-                : "bg-yellow-500 text-white"
-            }
-          >
-            {comparison.verdict}
-          </Badge>
-        </div>
-      </Card>
-
-      {/* Lease Term Fairness */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-green-500/10 rounded-lg">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-          </div>
-          <h3 className="text-lg font-semibold">Lease Term Fairness</h3>
-        </div>
-
-        <div className="space-y-3">
-          <FairnessRow
-            label="APR"
-            fair={lease_analysis.fairness_checks.apr_fair}
-            rating={lease_analysis.fairness_checks.apr_rating}
-          />
-          <FairnessRow
-            label="Down Payment"
-            fair={lease_analysis.fairness_checks.down_payment_fair}
-          />
-          <FairnessRow
-            label="Residual Value"
-            fair={lease_analysis.fairness_checks.residual_value_fair}
-          />
-        </div>
-
-        {/* Recommendations */}
-        {lease_analysis.recommendations.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-500/5 rounded-lg border border-blue-500/20">
-            <p className="font-semibold text-sm mb-2 flex items-center gap-2">
-              <Info className="w-4 h-4" />
-              Recommendations
-            </p>
-            <ul className="space-y-2">
-              {lease_analysis.recommendations.map((rec: string, i: number) => (
-                <li key={i} className="text-sm flex items-start gap-2">
-                  <span className="text-blue-500 mt-0.5">•</span>
-                  <span>{rec}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Card>
-
-      {/* Total Cost Breakdown */}
-      <Card className="p-6 bg-gradient-to-br from-primary/5 to-secondary/5">
-        <h3 className="font-semibold mb-4">Total Cost Breakdown</h3>
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Total Payments</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(lease_analysis.total_cost)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Interest</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(lease_analysis.total_interest)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Estimated Lease Value</p>
-            <p className="text-lg font-semibold text-primary">
-              {formatCurrency(price_estimate.estimated_lease_value)}
-            </p>
-          </div>
-        </div>
-      </Card>
+// ── helper sub-components ──────────────────────────────────────────────────────
+function Stat({
+  label, value, color, center, right,
+}: {
+  label: string; value: string; color: string; center?: boolean; right?: boolean;
+}) {
+  return (
+    <div className={center ? "text-center" : right ? "text-right" : ""}>
+      <p className="text-[11px] text-slate-500 mb-1">{label}</p>
+      <p className={`text-sm font-bold ${color}`}>{value}</p>
     </div>
   );
 }
 
-// Fairness Row Component
-function FairnessRow({
-  label,
-  fair,
-  rating,
-}: {
-  label: string;
-  fair: boolean;
-  rating?: string;
-}) {
+function SubScore({ label, score, color }: { label: string; score: number; color: string }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-      <span className="text-sm">{label}</span>
-      <div className="flex items-center gap-2">
-        {fair ? (
-          <>
-            <CheckCircle className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-green-500 font-medium">Fair</span>
-          </>
-        ) : (
-          <>
-            <AlertCircle className="w-4 h-4 text-yellow-500" />
-            <span className="text-sm text-yellow-500 font-medium">
-              {rating || "Review"}
-            </span>
-          </>
-        )}
-      </div>
+    <div className="p-3 rounded-xl bg-white/4 border border-white/6 text-center">
+      <p className="text-[11px] text-slate-500 mb-1">{label}</p>
+      <p className={`text-xl font-black ${color}`}>{Math.round(score)}</p>
     </div>
   );
 }

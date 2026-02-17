@@ -1,192 +1,195 @@
-# backend/app/routes/fairness.py
 """
-Contract Fairness Score Routes
-Separate from negotiation - focused only on scoring
+app/routes/fairness.py
+
+Fairness scoring route.
+
+POST /api/fairness/score/{contract_id}
+    Compute (or recompute) the fairness score for a contract using the
+    intent-driven fairness engine and return a detailed breakdown.
+
+This route does NOT call MarketCheck — use POST /api/market/enrich/{id} for
+the full pipeline.  Here we score based purely on contract terms vs benchmarks.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from __future__ import annotations
+
+import json
+import logging
+from decimal import Decimal
 from typing import Optional
-from app.core.fairness_scorer import FairnessScorer
-from app.core.price_estimation import PriceEstimationService
-from app.generated.prisma import Prisma
-from app.database import get_db
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from app.database import get_db
+from app.core.fairness import calculate_fairness_score
+from app.core.negotiation_rules import NegotiationRules
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ── response schema ─────────────────────────────────────────────────────────────
+
 class FairnessScoreResponse(BaseModel):
-    """Response for fairness score calculation"""
-    contract_id: str
-    fairness_score: float
-    rating: str
-    summary: str
-    breakdown: dict
-    red_flags: list
-    warnings: list
+    contract_id:    str
+    final_score:    float
+    rating:         str
+    price_score:    float
+    apr_score:      float
+    fees_score:     float
+    term_score:     float
+    red_flags:      list
+    warnings:       list
     recommendations: list
+    negotiation_intents: list
 
 
-def convert_sla_to_dict(sla) -> dict:
-    """Convert Prisma SLA model to dict"""
+# ── helpers (duplicated minimally from market.py to keep route self-contained) ──
+
+def _to_float(value) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sla_to_negotiation_dict(sla) -> dict:
+    """Map Prisma ContractSLA → NegotiationRules input dict."""
     if not sla:
         return {}
-    
-    def to_float(value):
-        return float(value) if value is not None else None
-    
+
+    def pct_str(v) -> Optional[str]:
+        f = _to_float(v)
+        return f"{f}%" if f is not None else None
+
     return {
-        "interest_rate": f"{float(sla.aprPercent)}%" if sla.aprPercent else None,
-        "monthly_payment": to_float(sla.monthlyPayment),
-        "down_payment": to_float(sla.downPayment),
-        "lease_term_months": sla.termMonths,
-        "mileage_allowance": sla.mileageAllowanceYr,
-        "overage_charge": to_float(sla.mileageOverageFee),
-        "early_termination_fee": to_float(sla.earlyTerminationFee),
-        "residual_value": to_float(sla.residualValue),
-        "purchase_option": to_float(sla.purchaseOptionPrice),
+        "interest_rate":         pct_str(sla.aprPercent),
+        "lease_term_months":     sla.termMonths,
+        "monthly_payment":       _to_float(sla.monthlyPayment),
+        "down_payment":          _to_float(sla.downPayment),
+        "residual_value":        _to_float(sla.residualValue),
+        "mileage_allowance":     sla.mileageAllowanceYr,
+        "overage_charge":        _to_float(sla.mileageOverageFee),
+        "early_termination_fee": _to_float(sla.earlyTerminationFee),
+        "late_fee":              sla.lateFeePolicy,
+        "fees_total":            _to_float(sla.feesTotal),
+        "dealer_price":          _to_float(sla.capCost) or _to_float(sla.msrp),
     }
 
 
-@router.post("/calculate-fairness/{contract_id}", response_model=FairnessScoreResponse)
-async def calculate_fairness_score(
-    contract_id: str,
-    db: Prisma = Depends(get_db)
-):
-    """
-    Calculate comprehensive fairness score (0-100) for a contract
-    
-    Analyzes:
-    - APR fairness (25 points)
-    - Monthly payment vs market (20 points)
-    - Down payment (15 points)
-    - Mileage terms (15 points)
-    - Fees & penalties (15 points)
-    - Residual value (10 points)
-    
-    Stores result in database: fairnessScore, redFlagLevel
-    """
-    
-    try:
-        # Fetch contract with SLA and vehicle
-        contract = await db.contract.find_unique(
-            where={"id": contract_id},
-            include={"sla": True, "vehicle": True}
-        )
-        
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-        
-        if not contract.sla:
-            raise HTTPException(
-                status_code=400,
-                detail="No SLA data available. Run /extract-sla first."
-            )
-        
-        # Convert SLA to dict
-        sla_data = convert_sla_to_dict(contract.sla)
-        
-        # Get vehicle price estimate
-        vehicle_price = 35000.0  # Default
-        
-        if contract.vehicle:
-            try:
-                price_estimate = PriceEstimationService.get_vehicle_msrp_range(
-                    year=contract.vehicle.year,
-                    make=contract.vehicle.make,
-                    model=contract.vehicle.model,
-                    trim=contract.vehicle.trim
-                )
-                vehicle_price = price_estimate["fair_market_value"]
-                
-                print(f"✅ Vehicle price estimated: ${vehicle_price:,.2f}")
-            except Exception as e:
-                print(f"⚠️  Using default vehicle price: {e}")
-        
-        # Calculate comprehensive fairness score
-        fairness_result = FairnessScorer.calculate_comprehensive_score(
-            sla_data=sla_data,
-            vehicle_price=vehicle_price,
-            vehicle_data={
-                "year": contract.vehicle.year if contract.vehicle else None,
-                "make": contract.vehicle.make if contract.vehicle else None,
-                "model": contract.vehicle.model if contract.vehicle else None,
-            }
-        )
-        
-        # ✅ SAVE TO DATABASE
-        await db.contract.update(
-            where={"id": contract_id},
-            data={
-                "fairnessScore": fairness_result["total_score"],
-                "redFlagLevel": fairness_result["rating"]
-            }
-        )
-        
-        print(f"✅ Saved fairness score: {fairness_result['total_score']}/100 ({fairness_result['rating']})")
-        
-        return {
-            "contract_id": contract_id,
-            "fairness_score": fairness_result["total_score"],
-            "rating": fairness_result["rating"],
-            "summary": fairness_result["summary"],
-            "breakdown": fairness_result["breakdown"],
-            "red_flags": fairness_result["red_flags"],
-            "warnings": fairness_result["warnings"],
-            "recommendations": fairness_result["recommendations"]
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        print(f"Fairness calculation error: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Fairness calculation failed: {str(e)}"
-        )
+def _rating_from_score(score: float) -> str:
+    if score >= 85:
+        return "Excellent"
+    elif score >= 70:
+        return "Good"
+    elif score >= 55:
+        return "Fair"
+    elif score >= 40:
+        return "Poor"
+    return "Very Poor"
 
 
-@router.get("/fairness-score/{contract_id}")
-async def get_fairness_score(
+# ── route ───────────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/score/{contract_id}",
+    response_model=FairnessScoreResponse,
+    summary="Calculate intent-driven fairness score for a contract",
+)
+async def score_contract_fairness(
     contract_id: str,
-    db: Prisma = Depends(get_db)
+    db=Depends(get_db),
 ):
     """
-    Get stored fairness score from database
-    
-    Returns cached score if available, otherwise calculates new one
+    Calculate fairness score using:
+    1. NegotiationRules intent engine → score + red flags + recommendations
+    2. calculate_fairness_score()     → weighted sub-scores
+
+    Saves fairnessScore + redFlagLevel + negotiationIntents to Contract row.
     """
-    
-    try:
-        contract = await db.contract.find_unique(
-            where={"id": contract_id}
-        )
-        
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-        
-        # If score exists, return it
-        if contract.fairnessScore is not None:
-            return {
-                "contract_id": contract_id,
-                "fairness_score": float(contract.fairnessScore),
-                "rating": contract.redFlagLevel or "Unknown",
-                "cached": True
-            }
-        
-        # Otherwise, calculate it
-        # (This will call the calculate endpoint internally)
-        return {
-            "contract_id": contract_id,
-            "message": "No cached score. Call POST /calculate-fairness/{contract_id} first.",
-            "cached": False
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
+    # Load contract + SLA
+    contract = await db.contract.find_unique(
+        where={"id": contract_id},
+        include={"sla": True, "vehicle": True},
+    )
+
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if not contract.sla:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch fairness score: {str(e)}"
+            status_code=400,
+            detail="No SLA data. Run /extract-sla/{contract_id} first.",
         )
+
+    sla_dict = _sla_to_negotiation_dict(contract.sla)
+    vehicle_dict = (
+        {
+            "vin":   contract.vehicle.vin,
+            "year":  contract.vehicle.year,
+            "make":  contract.vehicle.make,
+            "model": contract.vehicle.model,
+            "trim":  contract.vehicle.trim,
+        }
+        if contract.vehicle
+        else None
+    )
+
+    # ── NegotiationRules intent analysis ────────────────────────────────────────
+    analysis = NegotiationRules.analyze_contract(
+        sla_data=sla_dict,
+        vehicle_data=vehicle_dict,
+        user_income=None,
+    )
+
+    # ── Weighted sub-score breakdown ─────────────────────────────────────────────
+    # Pull market price from SLA.otherTerms if a previous /enrich call stored it
+    predicted_price: Optional[float] = None
+    if contract.sla.otherTerms:
+        try:
+            raw = contract.sla.otherTerms
+            parsed = raw if isinstance(raw, dict) else json.loads(raw)
+            market_blob = parsed.get("__market__", {})
+            predicted_price = market_blob.get("market_price")
+        except Exception:
+            pass
+
+    breakdown = calculate_fairness_score(
+        dealer_price=sla_dict.get("dealer_price"),
+        market_price=predicted_price,
+        apr=_to_float(contract.sla.aprPercent),
+        fees=sla_dict.get("fees_total"),
+        term=contract.sla.termMonths,
+    )
+
+    # Blend intent score (60 %) with weighted breakdown (40 %)
+    intent_score    = analysis.get("fairness_score", 50.0)
+    blended_score   = round(intent_score * 0.60 + breakdown["final_score"] * 0.40, 2)
+    rating          = _rating_from_score(blended_score)
+
+    # ── Persist ──────────────────────────────────────────────────────────────────
+    await db.contract.update(
+        where={"id": contract_id},
+        data={
+            "fairnessScore":      Decimal(str(blended_score)),
+            "redFlagLevel":       rating,
+            "negotiationIntents": json.dumps(analysis["negotiation_intents"]),
+        },
+    )
+
+    return FairnessScoreResponse(
+        contract_id=contract_id,
+        final_score=blended_score,
+        rating=rating,
+        price_score=breakdown["price_score"],
+        apr_score=breakdown["apr_score"],
+        fees_score=breakdown["fees_score"],
+        term_score=breakdown["term_score"],
+        red_flags=analysis.get("red_flags", []),
+        warnings=analysis.get("warnings", []),
+        recommendations=analysis.get("recommendations", []),
+        negotiation_intents=analysis.get("negotiation_intents", []),
+    )

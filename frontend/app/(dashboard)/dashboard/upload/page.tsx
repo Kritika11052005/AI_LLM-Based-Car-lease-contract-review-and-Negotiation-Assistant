@@ -9,16 +9,19 @@ import { backendAPI } from "@/lib/api";
 import { API_ENDPOINTS, UPLOAD_CONFIG } from "@/lib/constants";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   FileText,
   CheckCircle,
   Loader2,
   X,
+  Sparkles,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import Particles from "@/components/Particles";
 
 export default function UploadContractPage() {
   const router = useRouter();
@@ -32,35 +35,22 @@ export default function UploadContractPage() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      
-      if (user?.id) {
-        formData.append("user_id", user.id);
-      }
-
-      const config = {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent: any) => {
-          if (progressEvent.total) {
-            const progress = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            setUploadProgress(progress);
-          }
-        },
-      };
+      if (user?.id) formData.append("user_id", user.id);
 
       const response = await backendAPI.post(
         API_ENDPOINTS.CONTRACTS.UPLOAD,
         formData,
-        config
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (e: any) => {
+            if (e.total) setUploadProgress(Math.round((e.loaded * 100) / e.total));
+          },
+        }
       );
-      
       return response.data;
     },
     onSuccess: (data) => {
-      toast.success("Contract uploaded successfully!");
+      toast.success("Contract uploaded!");
       setIsExtracting(true);
       extractSLAMutation.mutate(data.contract_id);
     },
@@ -74,13 +64,11 @@ export default function UploadContractPage() {
   // SLA extraction mutation
   const extractSLAMutation = useMutation({
     mutationFn: async (contractId: string) => {
-      const response = await backendAPI.post(
-        API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId)
-      );
+      const response = await backendAPI.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId));
       return response.data;
     },
     onSuccess: (data) => {
-      toast.success("Contract analysis complete!");
+      toast.success("Analysis complete!");
       setIsExtracting(false);
       router.push(`/dashboard/contracts/${data.contract_id}`);
     },
@@ -90,17 +78,13 @@ export default function UploadContractPage() {
     },
   });
 
-  // Dropzone config
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
-
     if (!file) return;
-
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
       toast.error("File size must be less than 10MB");
       return;
     }
-
     setSelectedFile(file);
   }, []);
 
@@ -113,13 +97,11 @@ export default function UploadContractPage() {
 
   const handleUpload = () => {
     if (!selectedFile) return;
-    
     if (!user?.id) {
       toast.error("Please login to upload contracts");
       router.push("/login");
       return;
     }
-    
     uploadMutation.mutate(selectedFile);
   };
 
@@ -130,341 +112,318 @@ export default function UploadContractPage() {
 
   const isProcessing = uploadMutation.isPending || isExtracting;
 
+  // ── Fix: strip all event handlers that clash with framer-motion's types ──
+  const {
+    onAnimationStart: _a,
+    onDrag: _b,
+    onDragEnd: _c,
+    onDragStart: _d,
+    onDragEnter: _e,
+    onDragExit: _f,
+    onDragLeave: _g,
+    onDragOver: _h,
+    onDrop: _i,
+    ...dropzoneProps
+  } = getRootProps();
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          Upload Contract
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Upload your car lease or loan contract for AI-powered analysis
-        </p>
+    <div className="min-h-screen bg-[#0B1220] relative overflow-hidden">
+
+      {/* ── Particles background ─────────────────────────────────────────── */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <Particles
+          particleColors={["#2563EB", "#00D4A8", "#7C3AED"]}
+          particleCount={120}
+          particleSpread={8}
+          speed={0.04}
+          particleBaseSize={70}
+          moveParticlesOnHover={true}
+          alphaParticles={true}
+          disableRotation={false}
+          pixelRatio={1}
+        />
       </div>
 
-      {/* Upload Area */}
-      <Card className="p-8">
-        <div className="max-w-xl mx-auto">
-          {!selectedFile ? (
-            // Dropzone
-            <div
-              {...getRootProps()}
-              className={`
-                relative cursor-pointer bg-muted/30 p-12 rounded-[40px] 
-                border-2 border-dashed transition-all duration-300
-                ${isDragActive
-                  ? "border-primary bg-primary/10 scale-105"
-                  : "border-border hover:border-primary/50 hover:bg-muted/50"
-                }
-                ${isProcessing && "opacity-50 cursor-not-allowed"}
-              `}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
-                {/* Cloud Icon */}
-                <svg
-                  className="w-16 h-16 fill-gray-500 dark:fill-gray-400"
-                  viewBox="0 0 640 512"
-                >
-                  <path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9c-.1-2.7-.2-5.4-.2-8.1c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C409.9 102 428.3 96 448 96c53 0 96 43 96 96c0 12.2-2.3 23.8-6.4 34.6C596 238.4 640 290.1 640 352c0 70.7-57.3 128-128 128H144zm79-217c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z" />
-                </svg>
-
-                <div className="space-y-2">
-                  <p className="text-lg font-medium">
-                    {isDragActive ? "Drop it here!" : "Drag and Drop"}
-                  </p>
-                  <p className="text-muted-foreground">or</p>
-                  <span className="inline-block px-6 py-2 bg-foreground text-background rounded-lg font-medium hover:opacity-90 transition-opacity">
-                    Browse file
-                  </span>
-                </div>
-
-                <p className="text-sm text-muted-foreground mt-4">
-                  Supported: PDF, PNG, JPG (Max 10MB)
-                </p>
-              </div>
-            </div>
-          ) : (
-            // File Selected
-            <div className="space-y-6">
-              {/* File Preview */}
-              <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
-                <FileText className="w-10 h-10 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-                {!isProcessing && (
-                  <button
-                    onClick={handleCancel}
-                    className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-destructive" />
-                  </button>
-                )}
-              </div>
-
-              {/* Progress */}
-              {isProcessing && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {uploadMutation.isPending
-                        ? "Uploading..."
-                        : "Analyzing contract..."}
-                    </span>
-                    <span className="font-medium">
-                      {uploadMutation.isPending ? `${uploadProgress}%` : ""}
-                    </span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-2" />
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              {!isProcessing && (
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleUpload}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    <Upload className="w-5 h-5" />
-                    Upload & Analyze
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="px-6 py-3 border border-border rounded-lg font-medium hover:bg-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {/* Processing Indicator */}
-              {isProcessing && (
-                <div className="flex items-center justify-center gap-2 text-primary">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm font-medium">
-                    {uploadMutation.isPending
-                      ? "Uploading contract..."
-                      : "Extracting lease details with AI..."}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Premium Workflow Pipeline */}
-      <div className="relative pt-4 pb-16 px-4 md:px-8">
-        {/* Section Title */}
+      {/* ── Ambient blobs ────────────────────────────────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none z-0">
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(37,99,235,0.07) 0%, transparent 70%)" }}
+          animate={{ x: [0, 20, 0], y: [0, 15, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-[0%] right-[-5%] w-[450px] h-[450px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(0,212,168,0.05) 0%, transparent 70%)" }}
+          animate={{ x: [0, -18, 0], y: [0, -12, 0] }}
+          transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
+
+      {/* ── Page content ─────────────────────────────────────────────────── */}
+      <div className="relative z-10 px-6 md:px-10 lg:px-16 py-10 max-w-5xl mx-auto pt-20">
+
+        {/* ── Header ───────────────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="mb-10"
         >
-          <h2 className="text-xl font-semibold text-[#E5E7EB] mb-2">
-            How It Works
-          </h2>
-          <p className="text-sm text-[#9CA3AF]">
-            AI-powered contract analysis in three simple steps
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#00D4A8] flex items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+              <Upload className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-xs font-semibold text-[#2563EB] uppercase tracking-widest">
+              Contract Upload
+            </span>
+          </div>
+          <h1 className="text-3xl font-black text-white tracking-tight">
+            Upload Your Contract
+          </h1>
+          <p className="text-[#6B7280] mt-1.5 text-sm">
+            Drop your car lease or loan PDF — our AI will extract and analyze every clause.
           </p>
         </motion.div>
 
-        {/* Workflow Cards Grid */}
-        <div className="grid md:grid-cols-3 gap-6 md:gap-8 relative max-w-6xl mx-auto">
-          {/* Connection Lines (Desktop) */}
-          <div className="hidden md:block absolute top-[60px] left-0 right-0 pointer-events-none z-0">
-            <div className="flex items-center gap-8 px-4">
-              <div className="flex-1" />
-              {/* Line 1->2 */}
+        {/* ── Upload zone ──────────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="mb-10"
+        >
+          <AnimatePresence mode="wait">
+            {!selectedFile ? (
+              /* ── Dropzone ── */
               <motion.div
-                initial={{ scaleX: 0, opacity: 0 }}
-                animate={{ scaleX: 1, opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-                className="h-[2px] w-full bg-gradient-to-r from-[#2563EB]/60 via-[#2563EB]/30 to-transparent origin-left relative"
+                key="dropzone"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={{ duration: 0.3 }}
+                {...dropzoneProps} 
+                className={`
+                  relative cursor-pointer rounded-3xl border-2 border-dashed p-14
+                  flex flex-col items-center justify-center text-center
+                  transition-all duration-300 group overflow-hidden
+                  ${isDragActive
+                    ? "border-[#2563EB] bg-[#2563EB]/8 scale-[1.01]"
+                    : "border-white/[0.1] bg-white/[0.025] hover:border-[#2563EB]/50 hover:bg-white/[0.04]"
+                  }
+                  ${isProcessing ? "opacity-50 pointer-events-none" : ""}
+                `}
               >
-                {/* Animated dot */}
+                <input {...getInputProps()} />
+
+                {/* Glow on drag */}
+                {isDragActive && (
+                  <div className="absolute inset-0 rounded-3xl shadow-[inset_0_0_60px_rgba(37,99,235,0.12)] pointer-events-none" />
+                )}
+
+                {/* Upload icon */}
                 <motion.div
-                  initial={{ left: 0, opacity: 0 }}
-                  animate={{ left: "100%", opacity: [0, 1, 1, 0] }}
-                  transition={{
-                    duration: 2,
-                    delay: 0.8,
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 3,
-                  }}
-                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#2563EB] rounded-full shadow-[0_0_8px_rgba(37,99,235,0.8)]"
-                />
+                  animate={isDragActive ? { scale: 1.15, y: -8 } : { scale: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#2563EB]/20 to-[#00D4A8]/10 border border-[#2563EB]/20 flex items-center justify-center mb-6 group-hover:shadow-[0_0_30px_rgba(37,99,235,0.2)] transition-shadow duration-300"
+                >
+                  <svg className="w-9 h-9 fill-[#2563EB]" viewBox="0 0 640 512">
+                    <path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9c-.1-2.7-.2-5.4-.2-8.1c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C409.9 102 428.3 96 448 96c53 0 96 43 96 96c0 12.2-2.3 23.8-6.4 34.6C596 238.4 640 290.1 640 352c0 70.7-57.3 128-128 128H144zm79-217c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z" />
+                  </svg>
+                </motion.div>
+
+                <p className="text-lg font-bold text-white mb-1">
+                  {isDragActive ? "Release to upload" : "Drag & drop your contract"}
+                </p>
+                <p className="text-[#6B7280] text-sm mb-5">or</p>
+
+                <div className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#2563EB] text-white text-sm font-semibold shadow-[0_0_20px_rgba(37,99,235,0.35)] hover:bg-[#1E40AF] transition-colors">
+                  <Upload className="w-4 h-4" />
+                  Browse file
+                </div>
+
+                <p className="text-xs text-[#4B5563] mt-5">
+                  PDF, PNG, JPG · Max 10 MB
+                </p>
               </motion.div>
-              <div className="flex-1" />
-              {/* Line 2->3 */}
+            ) : (
+              /* ── File selected ── */
               <motion.div
-                initial={{ scaleX: 0, opacity: 0 }}
-                animate={{ scaleX: 1, opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.7, ease: "easeOut" }}
-                className="h-[2px] w-full bg-gradient-to-r from-[#00D4A8]/60 via-[#00D4A8]/30 to-transparent origin-left relative"
+                key="selected"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+                className="rounded-3xl border border-white/[0.08] bg-[#111827]/80 backdrop-blur-sm p-8 space-y-6"
               >
-                {/* Animated dot */}
-                <motion.div
-                  initial={{ left: 0, opacity: 0 }}
-                  animate={{ left: "100%", opacity: [0, 1, 1, 0] }}
-                  transition={{
-                    duration: 2,
-                    delay: 1.2,
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 3,
-                  }}
-                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#00D4A8] rounded-full shadow-[0_0_8px_rgba(0,212,168,0.8)]"
-                />
+                {/* File row */}
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                  <div className="w-12 h-12 rounded-xl bg-[#2563EB]/15 border border-[#2563EB]/25 flex items-center justify-center shrink-0">
+                    <FileText className="w-6 h-6 text-[#2563EB]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white truncate text-sm">{selectedFile.name}</p>
+                    <p className="text-xs text-[#6B7280] mt-0.5">
+                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB · Ready to upload
+                    </p>
+                  </div>
+                  {!isProcessing && (
+                    <button
+                      onClick={handleCancel}
+                      className="w-8 h-8 rounded-lg hover:bg-red-500/15 flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-4 h-4 text-red-400" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Progress */}
+                {isProcessing && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#9CA3AF]">
+                        {uploadMutation.isPending ? "Uploading…" : "Analyzing contract with AI…"}
+                      </span>
+                      {uploadMutation.isPending && (
+                        <span className="font-semibold text-[#2563EB]">{uploadProgress}%</span>
+                      )}
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#00D4A8]"
+                        initial={{ width: 0 }}
+                        animate={{ width: uploadMutation.isPending ? `${uploadProgress}%` : "100%" }}
+                        transition={{ duration: 0.4 }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Processing indicator */}
+                {isProcessing && (
+                  <div className="flex items-center justify-center gap-2.5 text-[#9CA3AF] py-1">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#2563EB]" />
+                    <span className="text-sm">
+                      {uploadMutation.isPending
+                        ? "Uploading contract…"
+                        : "Extracting lease details with AI…"
+                      }
+                    </span>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                {!isProcessing && (
+                  <div className="flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleUpload}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#2563EB] hover:bg-[#1E40AF] text-white font-semibold text-sm transition-colors shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Upload & Analyze
+                    </motion.button>
+                    <button
+                      onClick={handleCancel}
+                      className="px-5 py-3 rounded-xl border border-white/[0.08] text-[#9CA3AF] hover:text-white hover:border-white/[0.15] font-medium text-sm transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </motion.div>
-              <div className="flex-1" />
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* ── How it works ─────────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-widest mb-6 text-center">
+            How it works
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-4 relative">
+            {/* Connector lines (desktop) */}
+            <div className="hidden md:flex absolute top-[52px] left-[33%] right-[33%] items-center pointer-events-none z-0">
+              <div className="flex-1 h-px bg-gradient-to-r from-[#2563EB]/40 to-[#00D4A8]/40" />
+              <div className="mx-4 flex-1 h-px bg-gradient-to-r from-[#00D4A8]/40 to-transparent" />
             </div>
+
+            {[
+              {
+                icon: Upload,
+                color: "#2563EB",
+                bg: "bg-[#2563EB]/10",
+                border: "border-[#2563EB]/20",
+                step: "01",
+                title: "Upload Contract",
+                desc: "Drop your PDF or image — we support all common lease and loan formats.",
+                delay: 0,
+              },
+              {
+                icon: Zap,
+                color: "#00D4A8",
+                bg: "bg-[#00D4A8]/10",
+                border: "border-[#00D4A8]/20",
+                step: "02",
+                title: "AI Analysis",
+                desc: "Our AI reads every clause, flags red flags, and scores contract fairness.",
+                delay: 0.1,
+              },
+              {
+                icon: ShieldCheck,
+                color: "#10B981",
+                bg: "bg-emerald-500/10",
+                border: "border-emerald-500/20",
+                step: "03",
+                title: "Get Insights",
+                desc: "Receive a fairness score, negotiation script, and actionable tips.",
+                delay: 0.2,
+              },
+            ].map(({ icon: Icon, color, bg, border, step, title, desc, delay }) => (
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.3 + delay }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                className="group relative z-10 rounded-2xl border bg-[#111827]/70 backdrop-blur-sm p-6 transition-all duration-300 hover:border-white/[0.12] cursor-default"
+                style={{ borderColor: "rgba(255,255,255,0.06)" }}
+              >
+                {/* Step badge */}
+                <div className="absolute top-4 right-4 text-[10px] font-bold text-[#374151] tracking-wider">
+                  {step}
+                </div>
+
+                {/* Icon */}
+                <div className={`w-12 h-12 rounded-xl ${bg} border ${border} flex items-center justify-center mb-4 group-hover:shadow-lg transition-shadow`}
+                  style={{ boxShadow: `0 0 0 0 ${color}` }}
+                >
+                  <Icon className="w-5 h-5" style={{ color }} />
+                </div>
+
+                <h3 className="font-bold text-white text-sm mb-1.5">{title}</h3>
+                <p className="text-[#6B7280] text-xs leading-relaxed">{desc}</p>
+
+                {/* Bottom accent */}
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  whileHover={{ scaleX: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-2xl origin-left"
+                  style={{ background: `linear-gradient(90deg, ${color}, transparent)` }}
+                />
+              </motion.div>
+            ))}
           </div>
+        </motion.div>
 
-          {/* Card 1: Upload */}
-          <WorkflowCard
-            icon={Upload}
-            iconBg="bg-[#2563EB]/10"
-            iconColor="text-[#2563EB]"
-            title="Upload Contract"
-            description="Upload your lease/loan contract as PDF"
-            step="01"
-            delay={0}
-            accentColor="#2563EB"
-          />
-
-          {/* Card 2: AI Analysis */}
-          <WorkflowCard
-            icon={FileText}
-            iconBg="bg-[#00D4A8]/10"
-            iconColor="text-[#00D4A8]"
-            title="AI Analysis"
-            description="Our AI extracts key terms and finds red flags"
-            step="02"
-            delay={0.2}
-            accentColor="#00D4A8"
-          />
-
-          {/* Card 3: Get Insights */}
-          <WorkflowCard
-            icon={CheckCircle}
-            iconBg="bg-[#10B981]/10"
-            iconColor="text-[#10B981]"
-            title="Get Insights"
-            description="Receive negotiation tips and fairness scores"
-            step="03"
-            delay={0.4}
-            accentColor="#10B981"
-          />
-        </div>
       </div>
     </div>
-  );
-}
-
-// Premium Workflow Card Component
-function WorkflowCard({
-  icon: Icon,
-  iconBg,
-  iconColor,
-  title,
-  description,
-  step,
-  delay,
-  accentColor,
-}: {
-  icon: any;
-  iconBg: string;
-  iconColor: string;
-  title: string;
-  description: string;
-  step: string;
-  delay: number;
-  accentColor: string;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.5,
-        delay,
-        ease: [0.22, 0.61, 0.36, 1],
-      }}
-      whileHover={{
-        scale: 1.03,
-        y: -8,
-        transition: { duration: 0.3, ease: "easeOut" },
-      }}
-      className="group relative z-10"
-    >
-      <Card 
-        className="relative overflow-hidden p-6 bg-[#111827] border-[#1F2937] transition-all duration-300 group-hover:border-[#2563EB]"
-        style={{
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-        }}
-      >
-        {/* Hover glow effect */}
-        <div 
-          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-          style={{
-            boxShadow: `0 0 30px rgba(37, 99, 235, 0.2)`,
-          }}
-        />
-
-        {/* Step Number Badge */}
-        <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#0B1220] border border-[#1F2937] flex items-center justify-center group-hover:border-[#2563EB] transition-colors duration-300">
-          <span className="text-xs font-semibold text-[#9CA3AF] group-hover:text-[#2563EB] transition-colors duration-300">
-            {step}
-          </span>
-        </div>
-
-        {/* Icon */}
-        <motion.div
-          whileHover={{ 
-            scale: 1.15, 
-            y: -4,
-            transition: { duration: 0.2, ease: "easeOut" }
-          }}
-          className={`w-14 h-14 rounded-xl ${iconBg} flex items-center justify-center mb-5 shadow-lg`}
-          style={{
-            boxShadow: `0 4px 12px ${accentColor}20`,
-          }}
-        >
-          <Icon className={`w-7 h-7 ${iconColor}`} />
-        </motion.div>
-
-        {/* Content */}
-        <div>
-          <h3 className="font-semibold text-[#E5E7EB] mb-2 text-lg">
-            {title}
-          </h3>
-          <p className="text-sm text-[#9CA3AF] leading-relaxed">
-            {description}
-          </p>
-        </div>
-
-        {/* Subtle gradient overlay on hover */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-transparent group-hover:from-[#2563EB]/5 group-hover:to-transparent transition-all duration-500 pointer-events-none rounded-xl" />
-        
-        {/* Bottom accent line on hover */}
-        <motion.div
-          initial={{ scaleX: 0 }}
-          whileHover={{ scaleX: 1 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="absolute bottom-0 left-0 right-0 h-[2px] origin-left"
-          style={{
-            background: `linear-gradient(90deg, ${accentColor} 0%, transparent 100%)`,
-          }}
-        />
-      </Card>
-    </motion.div>
   );
 }
