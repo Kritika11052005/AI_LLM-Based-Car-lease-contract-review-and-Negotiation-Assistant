@@ -1,110 +1,122 @@
 import streamlit as st
+from pathlib import Path
 
-from components.upload import render_upload
-from components.chat import render_chat
-from components.contract_view import render_contract_view
-from components.vehicle_view import render_vehicle_view
+from frontend.components.upload import render_upload
+from frontend.components.dashboard_view import render_dashboard
+from frontend.components.vehicle_view import render_vehicle_view
+from frontend.components.chat import render_chat
 
 
 # ---------------- PAGE CONFIG ----------------
 
 st.set_page_config(
-    page_title="ContractClarity AI",
+    page_title="ContractClarity",
     page_icon="🚗",
     layout="wide"
 )
 
 
+# ---------------- LOAD CSS ----------------
+
+def load_css():
+
+    css_file = Path(__file__).parent / "styles.css"
+
+    if css_file.exists():
+
+        with open(css_file, "r", encoding="utf-8") as f:
+
+            css = f.read()
+
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+load_css()
+
+
 # ---------------- SESSION STATE INIT ----------------
 
 if "contract_id" not in st.session_state:
-    st.session_state.contract_id = None
+
+    st.session_state["contract_id"] = None
 
 if "contract_filename" not in st.session_state:
-    st.session_state.contract_filename = None
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state["contract_filename"] = None
 
 
 # ---------------- SIDEBAR ----------------
 
-st.sidebar.title("🚗 ContractClarity AI")
+with st.sidebar:
 
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "Upload Contract",
-        "Negotiate"
-    ]
-)
+    st.markdown("## 🚗 ContractClarity")
 
+    st.markdown("Enterprise Lease Intelligence")
 
-# ---------------- ACTIVE CONTRACT BANNER ----------------
+    if st.session_state.get("contract_filename"):
 
-if st.session_state.contract_filename:
+        st.markdown("---")
 
-    st.success(
-        f"📄 Active Contract: "
-        f"{st.session_state.contract_filename} "
-        f"(ID: {st.session_state.contract_id})"
+        st.markdown(
+            f"**Analyzed Contract:**\n\n"
+            f"{st.session_state.contract_filename}"
+        )
+
+    page = st.radio(
+        "Navigation",
+        [
+            "Upload Contract",
+            "Dashboard",
+            "Vehicle Intelligence",
+            "AI Assistant"
+        ],
+        label_visibility="collapsed"
     )
 
 
-# ---------------- UPLOAD PAGE ----------------
+# ---------------- HEADER ----------------
+
+st.markdown("### Contract Intelligence Platform")
+
+st.markdown(
+    "AI-powered contract analysis, pricing intelligence, and negotiation"
+)
+
+st.markdown("---")
+
+
+# ---------------- ROUTING ----------------
 
 if page == "Upload Contract":
 
-    st.title("Upload Contract")
-
     render_upload()
 
+elif page == "Dashboard":
 
-# ---------------- NEGOTIATE PAGE ----------------
+    if st.session_state.contract_id:
 
-elif page == "Negotiate":
+        render_dashboard(st.session_state.contract_id)
 
-    contract_id = st.session_state.contract_id
+    else:
 
-    if not contract_id:
+        st.info("Upload and analyze a contract first")
 
-        st.warning("Please upload and analyze a contract first.")
+elif page == "Vehicle Intelligence":
 
-        st.info(
-            "Go to 'Upload Contract' from sidebar to begin."
-        )
+    if st.session_state.contract_id:
 
-        st.stop()
+        render_vehicle_view(st.session_state.contract_id)
 
+    else:
 
-    st.title("Contract Intelligence Dashboard")
+        st.info("Upload and analyze a contract first")
 
+elif page == "AI Assistant":
 
-    # -------- Tabs Layout --------
+    if st.session_state.contract_id:
 
-    tab1, tab2, tab3 = st.tabs([
-        "📄 Contract Intelligence",
-        "🚘 VIN Details",
-        "💬 AI Negotiation Assistant"
-    ])
+        render_chat(st.session_state.contract_id)
 
+    else:
 
-    # -------- Contract View --------
-
-    with tab1:
-
-        render_contract_view(contract_id)
-
-
-    # -------- Vehicle View --------
-
-    with tab2:
-
-        render_vehicle_view(contract_id)
-
-
-    # -------- Chat View --------
-
-    with tab3:
-
-        render_chat(contract_id)
+        st.info("Upload and analyze a contract first")

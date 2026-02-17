@@ -1,0 +1,261 @@
+/* ================================
+   GLOBAL APP BACKGROUND
+================================ */
+
+.stApp {
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+
+/* ================================
+   SIDEBAR
+================================ */
+
+section[data-testid="stSidebar"] {
+    background-color: #020617;
+    border-right: 1px solid #1e293b;
+}
+
+section[data-testid="stSidebar"] * {
+    color: #e2e8f0 !important;
+}
+
+
+/* ================================
+   HEADERS
+================================ */
+
+h1, h2, h3, h4, h5, h6 {
+    color: #f1f5f9 !important;
+    font-weight: 600;
+}
+
+
+/* ================================
+   TEXT VISIBILITY FIX
+================================ */
+
+p, span, div, label {
+    color: #cbd5e1 !important;
+}
+
+
+/* ================================
+   CONTRACT TITLE
+================================ */
+
+.contract-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+
+/* ================================
+   KPI METRIC CARDS
+================================ */
+
+div[data-testid="metric-container"] {
+
+    background: linear-gradient(145deg, #020617, #020617);
+
+    border: 1px solid #1e293b;
+
+    padding: 20px;
+
+    border-radius: 12px;
+
+    box-shadow: 0 0 12px rgba(0,0,0,0.4);
+
+}
+
+
+/* metric label */
+div[data-testid="metric-container"] label {
+
+    color: #94a3b8 !important;
+
+    font-size: 14px;
+
+}
+
+
+/* metric value */
+div[data-testid="metric-container"] div {
+
+    color: #f8fafc !important;
+
+    font-size: 28px;
+
+    font-weight: bold;
+
+}
+
+
+/* ================================
+   BUTTON FIX (IMPORTANT)
+================================ */
+
+.stButton > button {
+
+    background-color: #3b82f6 !important;
+
+    color: white !important;
+
+    font-weight: 600;
+
+    border-radius: 10px;
+
+    padding: 10px 24px;
+
+    border: none;
+
+}
+
+.stButton > button:hover {
+
+    background-color: #2563eb !important;
+
+    color: white !important;
+
+}
+
+
+/* ================================
+   FILE UPLOADER
+================================ */
+
+section[data-testid="stFileUploader"] {
+
+    background-color: #020617;
+
+    border: 1px solid #1e293b;
+
+    border-radius: 10px;
+
+    padding: 15px;
+
+}
+
+
+/* ================================
+   INFO BOX
+================================ */
+
+.stAlert {
+
+    background-color: #020617;
+
+    border: 1px solid #1e293b;
+
+    color: #e2e8f0;
+
+}
+
+
+/* ================================
+   SUCCESS BOX
+================================ */
+
+.stSuccess {
+
+    background-color: #022c22;
+
+    border: 1px solid #065f46;
+
+    color: #d1fae5;
+
+}
+
+
+/* ================================
+   ERROR BOX
+================================ */
+
+.stError {
+
+    background-color: #450a0a;
+
+    border: 1px solid #7f1d1d;
+
+    color: #fee2e2;
+
+}
+
+
+/* ================================
+   DATAFRAME
+================================ */
+
+[data-testid="stDataFrame"] {
+
+    background-color: #020617;
+
+    border: 1px solid #1e293b;
+
+    border-radius: 10px;
+
+}
+
+
+/* ================================
+   CHART CONTAINER
+================================ */
+
+.stPlotlyChart {
+
+    background-color: #020617;
+
+    border-radius: 12px;
+
+    padding: 10px;
+
+}
+
+
+/* ================================
+   SCROLLBAR
+================================ */
+
+::-webkit-scrollbar {
+
+    width: 10px;
+
+}
+
+::-webkit-scrollbar-track {
+
+    background: #020617;
+
+}
+
+::-webkit-scrollbar-thumb {
+
+    background: #334155;
+
+    border-radius: 10px;
+
+}
+
+
+/* ================================
+   REMOVE STREAMLIT HEADER
+================================ */
+
+header[data-testid="stHeader"] {
+
+    background: transparent;
+
+}
+
+
+/* ================================
+   REMOVE STREAMLIT FOOTER
+================================ */
+
+footer {
+
+    visibility: hidden;
+
+}

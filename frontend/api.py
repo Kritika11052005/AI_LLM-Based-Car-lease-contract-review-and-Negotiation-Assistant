@@ -3,7 +3,7 @@ import requests
 BACKEND_URL = "http://127.0.0.1:8000"
 
 
-# ---------------- UPLOAD ----------------
+# ---------------- UPLOAD CONTRACT ----------------
 
 def upload_contract(file):
 
@@ -11,36 +11,54 @@ def upload_contract(file):
         "file": (file.name, file, "application/pdf")
     }
 
-    response = requests.post(
-        f"{BACKEND_URL}/upload",
-        files=files
-    )
+    try:
 
-    print("UPLOAD STATUS:", response.status_code)
-    print("UPLOAD RESPONSE:", response.text)
+        response = requests.post(
+            f"{BACKEND_URL}/upload",
+            files=files
+        )
 
-    if response.status_code != 200:
+        print("UPLOAD STATUS:", response.status_code)
+        print("UPLOAD RESPONSE:", response.text)
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+
+        return {
+            "contract_id": data.get("contract_id")
+        }
+
+    except Exception as e:
+
+        print("UPLOAD ERROR:", str(e))
         return None
-
-    return response.json()
 
 
 # ---------------- GET CONTRACT ----------------
 
 def get_contract(contract_id):
 
-    response = requests.get(
-        f"{BACKEND_URL}/contract",
-        params={"contract_id": contract_id}
-    )
+    try:
 
-    print("CONTRACT STATUS:", response.status_code)
-    print("CONTRACT RAW:", response.text)
+        response = requests.get(
+            f"{BACKEND_URL}/contract",
+            params={"contract_id": contract_id}
+        )
 
-    if response.status_code != 200:
+        print("CONTRACT STATUS:", response.status_code)
+        print("CONTRACT RESPONSE:", response.text)
+
+        if response.status_code != 200:
+            return None
+
+        return response.json()
+
+    except Exception as e:
+
+        print("CONTRACT ERROR:", str(e))
         return None
-
-    return response.json()
 
 
 # ---------------- CHAT ----------------
@@ -49,13 +67,8 @@ def send_chat(contract_id, message):
 
     try:
 
-        url = f"{BACKEND_URL}/chat/chat"
-
-        print("CALLING:", url)
-        print("PARAMS:", contract_id, message)
-
         response = requests.post(
-            url,
+            f"{BACKEND_URL}/chat/chat",
             params={
                 "contract_id": contract_id,
                 "message": message

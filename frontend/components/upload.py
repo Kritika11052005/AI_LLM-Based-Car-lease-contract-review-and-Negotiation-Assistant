@@ -4,22 +4,51 @@ from frontend.api import upload_contract
 
 def render_upload():
 
-    st.title("📄 Upload Contract")
+    st.markdown("## 📄 Upload Contract")
 
-    file = st.file_uploader(
+    # Show currently analyzed contract
+    if st.session_state.get("contract_filename"):
+
+        st.success(
+            f"Currently analyzed contract: "
+            f"{st.session_state.contract_filename}"
+        )
+
+    uploaded_file = st.file_uploader(
         "Upload lease contract",
         type=["pdf"]
     )
 
-    if file and st.button("Analyze Contract"):
+    if uploaded_file:
 
-        with st.spinner("Analyzing contract..."):
+        st.write(f"Selected: {uploaded_file.name}")
 
-            data = upload_contract(file)
-            st.session_state.contract_id = data["contract_id"]
-            st.session_state.contract_filename = data["filename"]
+        if st.button("Analyze Contract"):
 
+            with st.spinner("Analyzing contract..."):
 
-            st.success("Contract analyzed successfully!")
+                result = upload_contract(uploaded_file)
 
-            st.rerun()
+                print("UPLOAD RESULT:", result)
+
+                if not result:
+
+                    st.error("Upload failed. Backend error.")
+                    return
+
+                contract_id = result.get("contract_id")
+
+                if not contract_id:
+
+                    st.error("Backend did not return contract_id")
+                    return
+
+                # Save session state
+                st.session_state["contract_id"] = contract_id
+                st.session_state["contract_filename"] = uploaded_file.name
+
+                st.success(
+                    f"Contract analyzed successfully: {uploaded_file.name}"
+                )
+
+                st.rerun()
