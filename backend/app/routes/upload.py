@@ -220,6 +220,7 @@ async def extract_sla(contract_id: str, db: Prisma = Depends(get_db)):
     Saves to ContractSLA table with proper type conversion
     
     ✅ FIX: Properly parses mileage_overage_fee and all other fields
+    ✅ FIX: Converts vehicle year to integer before database save
     """
     
     # Get contract
@@ -258,10 +259,18 @@ async def extract_sla(contract_id: str, db: Prisma = Depends(get_db)):
                 if existing_vehicle:
                     vehicle_id = existing_vehicle.id
                 else:
+                    # ✅ FIX: Convert year to integer before saving to database
+                    year_value = vehicle_data.get("year")
+                    try:
+                        year_int = int(year_value) if year_value else None
+                    except (ValueError, TypeError):
+                        year_int = None
+                        print(f"⚠️  Could not parse year: {year_value}")
+                    
                     vehicle = await db.vehicle.create(
                         data={
                             "vin": vin,
-                            "year": vehicle_data.get("year"),
+                            "year": year_int,  # ✅ Now properly converted to int
                             "make": vehicle_data.get("make"),
                             "model": vehicle_data.get("model"),
                             "trim": vehicle_data.get("trim"),

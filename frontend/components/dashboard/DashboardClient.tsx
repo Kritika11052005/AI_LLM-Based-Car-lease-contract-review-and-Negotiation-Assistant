@@ -16,7 +16,8 @@ import {
   ArrowUpRight,
   Upload,
   MessageSquare,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -545,6 +546,8 @@ function SavingsInsightPanel({ insight }: { insight: any }) {
 }
 
 function RecentActivityFeed({ activities }: { activities: any[] }) {
+  const router = useRouter();
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -564,9 +567,9 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
               activities.map((activity) => (
                 <div 
                   key={activity.id}
-                  className="flex items-start gap-3 p-3 bg-[#0B1220] rounded-lg border border-[#1F2937] hover:border-[#2563EB]/50 transition-colors"
+                  className="flex items-start gap-3 p-3 bg-[#0B1220] rounded-lg border border-[#1F2937] hover:border-[#2563EB]/50 transition-colors group"
                 >
-                  <div className="w-2 h-2 rounded-full bg-[#2563EB] mt-2" />
+                  <div className="w-2 h-2 rounded-full bg-[#2563EB] mt-2 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{activity.description}</p>
                     <p className="text-xs text-[#9CA3AF] mt-1">
@@ -578,6 +581,17 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
                       })}
                     </p>
                   </div>
+                  {activity.contract_id && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => router.push(`/dashboard/contracts/${activity.contract_id}`)}
+                      className="shrink-0 h-8 px-3 text-xs hover:bg-[#2563EB]/20 hover:text-[#2563EB] transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1.5" />
+                      View
+                    </Button>
+                  )}
                 </div>
               ))
             ) : (
