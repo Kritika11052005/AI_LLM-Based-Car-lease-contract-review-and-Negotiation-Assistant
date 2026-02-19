@@ -13,15 +13,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   FileText,
-  CheckCircle,
   Loader2,
   X,
   Sparkles,
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import Particles from "@/components/Particles";
+
+// ── Animated step indicator shown during AI extraction ───────────────────────
+const EXTRACTION_STEPS = [
+  "Reading contract text…",
+  "Building AI index…",
+  "Extracting financial terms…",
+  "Analyzing mileage & fees…",
+  "Checking warranty & insurance…",
+  "Finalizing analysis…",
+];
 
 export default function UploadContractPage() {
   const router = useRouter();
@@ -29,8 +37,63 @@ export default function UploadContractPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionStepIdx, setExtractionStepIdx] = useState(0);
 
-  // Upload mutation
+  // ── Cycle through step messages while extracting ──────────────────────────
+  const startStepCycle = () => {
+    setExtractionStepIdx(0);
+    const interval = setInterval(() => {
+      setExtractionStepIdx((prev) => {
+        if (prev >= EXTRACTION_STEPS.length - 1) {
+          clearInterval(interval);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 14_000); // advance every 14s (~90s total / 6 steps)
+    return interval;
+  };
+
+  // ── SLA extraction mutation ───────────────────────────────────────────────
+  // ✅ FIX 1: Declare BEFORE uploadMutation so it can be referenced
+  const extractSLAMutation = useMutation({
+    mutationFn: async (contractId: string) => {
+      const response = await backendAPI.post(
+        API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId),
+        {},
+        {
+          // ✅ FIX 2: 3-minute timeout — RAG extraction takes ~60-90s
+          // Without this axios kills the request and fires onError instead of onSuccess
+          timeout: 180_000,
+        }
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Analysis complete! Redirecting…");
+      setIsExtracting(false);
+
+      const contractId = data.contract_id;
+      if (!contractId) {
+        toast.error("Server did not return a contract ID");
+        return;
+      }
+
+      // ✅ FIX 3: Correct route path (plural "contracts")
+      router.push(`/dashboard/contracts/${contractId}`);
+    },
+    onError: (error: any) => {
+      // ✅ FIX 4: Proper axios error reading
+      const msg =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Analysis failed. Please try again.";
+      toast.error(msg);
+      setIsExtracting(false);
+    },
+  });
+
+  // ── Upload mutation ───────────────────────────────────────────────────────
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -42,42 +105,38 @@ export default function UploadContractPage() {
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
+          timeout: 60_000,
           onUploadProgress: (e: any) => {
-            if (e.total) setUploadProgress(Math.round((e.loaded * 100) / e.total));
+            if (e.total)
+              setUploadProgress(Math.round((e.loaded * 100) / e.total));
           },
         }
       );
       return response.data;
     },
     onSuccess: (data) => {
-      toast.success("Contract uploaded!");
+      const contractId = data.contract_id;
+      if (!contractId) {
+        toast.error("Upload succeeded but no contract ID returned");
+        return;
+      }
+      toast.success("Contract uploaded! Starting AI analysis…");
       setIsExtracting(true);
-      extractSLAMutation.mutate(data.contract_id);
+      startStepCycle();
+      extractSLAMutation.mutate(contractId);
     },
     onError: (error: any) => {
-      toast.error(error.detail || "Upload failed");
+      const msg =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Upload failed. Please try again.";
+      toast.error(msg);
       setSelectedFile(null);
       setUploadProgress(0);
     },
   });
 
-  // SLA extraction mutation
-  const extractSLAMutation = useMutation({
-    mutationFn: async (contractId: string) => {
-      const response = await backendAPI.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId));
-      return response.data;
-    },
-    onSuccess: (data) => {
-      toast.success("Analysis complete!");
-      setIsExtracting(false);
-      router.push(`/dashboard/contracts/${data.contract_id}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.detail || "Analysis failed");
-      setIsExtracting(false);
-    },
-  });
-
+  // ── Dropzone ──────────────────────────────────────────────────────────────
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -111,8 +170,9 @@ export default function UploadContractPage() {
   };
 
   const isProcessing = uploadMutation.isPending || isExtracting;
+  const currentStep = EXTRACTION_STEPS[extractionStepIdx];
 
-  // ── Fix: strip all event handlers that clash with framer-motion's types ──
+  // Strip event handlers that clash with framer-motion types
   const {
     onAnimationStart: _a,
     onDrag: _b,
@@ -129,7 +189,7 @@ export default function UploadContractPage() {
   return (
     <div className="min-h-screen bg-[#0B1220] relative overflow-hidden">
 
-      {/* ── Particles background ─────────────────────────────────────────── */}
+      {/* Particles background */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Particles
           particleColors={["#2563EB", "#00D4A8", "#7C3AED"]}
@@ -144,7 +204,7 @@ export default function UploadContractPage() {
         />
       </div>
 
-      {/* ── Ambient blobs ────────────────────────────────────────────────── */}
+      {/* Ambient blobs */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <motion.div
           className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full"
@@ -160,10 +220,10 @@ export default function UploadContractPage() {
         />
       </div>
 
-      {/* ── Page content ─────────────────────────────────────────────────── */}
+      {/* Page content */}
       <div className="relative z-10 px-6 md:px-10 lg:px-16 py-10 max-w-5xl mx-auto pt-20">
 
-        {/* ── Header ───────────────────────────────────────────────────────── */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -186,7 +246,7 @@ export default function UploadContractPage() {
           </p>
         </motion.div>
 
-        {/* ── Upload zone ──────────────────────────────────────────────────── */}
+        {/* Upload zone */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -195,14 +255,14 @@ export default function UploadContractPage() {
         >
           <AnimatePresence mode="wait">
             {!selectedFile ? (
-              /* ── Dropzone ── */
+              /* Dropzone */
               <motion.div
                 key="dropzone"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.97 }}
                 transition={{ duration: 0.3 }}
-                {...dropzoneProps} 
+                {...dropzoneProps}
                 className={`
                   relative cursor-pointer rounded-3xl border-2 border-dashed p-14
                   flex flex-col items-center justify-center text-center
@@ -215,13 +275,9 @@ export default function UploadContractPage() {
                 `}
               >
                 <input {...getInputProps()} />
-
-                {/* Glow on drag */}
                 {isDragActive && (
                   <div className="absolute inset-0 rounded-3xl shadow-[inset_0_0_60px_rgba(37,99,235,0.12)] pointer-events-none" />
                 )}
-
-                {/* Upload icon */}
                 <motion.div
                   animate={isDragActive ? { scale: 1.15, y: -8 } : { scale: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
@@ -231,23 +287,18 @@ export default function UploadContractPage() {
                     <path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9c-.1-2.7-.2-5.4-.2-8.1c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C409.9 102 428.3 96 448 96c53 0 96 43 96 96c0 12.2-2.3 23.8-6.4 34.6C596 238.4 640 290.1 640 352c0 70.7-57.3 128-128 128H144zm79-217c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z" />
                   </svg>
                 </motion.div>
-
                 <p className="text-lg font-bold text-white mb-1">
                   {isDragActive ? "Release to upload" : "Drag & drop your contract"}
                 </p>
                 <p className="text-[#6B7280] text-sm mb-5">or</p>
-
                 <div className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#2563EB] text-white text-sm font-semibold shadow-[0_0_20px_rgba(37,99,235,0.35)] hover:bg-[#1E40AF] transition-colors">
                   <Upload className="w-4 h-4" />
                   Browse file
                 </div>
-
-                <p className="text-xs text-[#4B5563] mt-5">
-                  PDF, PNG, JPG · Max 10 MB
-                </p>
+                <p className="text-xs text-[#4B5563] mt-5">PDF, PNG, JPG · Max 10 MB</p>
               </motion.div>
             ) : (
-              /* ── File selected ── */
+              /* File selected / processing */
               <motion.div
                 key="selected"
                 initial={{ opacity: 0, y: 10 }}
@@ -277,42 +328,56 @@ export default function UploadContractPage() {
                   )}
                 </div>
 
-                {/* Progress */}
+                {/* Progress bar */}
                 {isProcessing && (
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[#9CA3AF]">
-                        {uploadMutation.isPending ? "Uploading…" : "Analyzing contract with AI…"}
+                        {uploadMutation.isPending ? "Uploading…" : currentStep}
                       </span>
                       {uploadMutation.isPending && (
                         <span className="font-semibold text-[#2563EB]">{uploadProgress}%</span>
                       )}
                     </div>
                     <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#00D4A8]"
-                        initial={{ width: 0 }}
-                        animate={{ width: uploadMutation.isPending ? `${uploadProgress}%` : "100%" }}
-                        transition={{ duration: 0.4 }}
-                      />
+                      {uploadMutation.isPending ? (
+                        <motion.div
+                          className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#00D4A8]"
+                          animate={{ width: `${uploadProgress}%` }}
+                          transition={{ duration: 0.4 }}
+                        />
+                      ) : (
+                        /* ✅ Indeterminate shimmer bar during long RAG extraction */
+                        <motion.div
+                          className="h-full rounded-full bg-gradient-to-r from-[#2563EB] via-[#00D4A8] to-[#2563EB]"
+                          style={{ backgroundSize: "200% 100%" }}
+                          animate={{ backgroundPosition: ["0% 0%", "100% 0%", "0% 0%"] }}
+                          transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                        />
+                      )}
                     </div>
+                    {/* ✅ Time expectation — prevents user from thinking it's frozen */}
+                    {isExtracting && (
+                      <p className="text-[10px] text-[#4B5563] text-center">
+                        AI analysis typically takes 60–90 seconds for all 20 fields
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* Processing indicator */}
+                {/* Spinner + current step */}
                 {isProcessing && (
                   <div className="flex items-center justify-center gap-2.5 text-[#9CA3AF] py-1">
                     <Loader2 className="w-4 h-4 animate-spin text-[#2563EB]" />
                     <span className="text-sm">
                       {uploadMutation.isPending
                         ? "Uploading contract…"
-                        : "Extracting lease details with AI…"
-                      }
+                        : currentStep}
                     </span>
                   </div>
                 )}
 
-                {/* Action buttons */}
+                {/* Action buttons — only shown when idle */}
                 {!isProcessing && (
                   <div className="flex gap-3">
                     <motion.button
@@ -337,7 +402,7 @@ export default function UploadContractPage() {
           </AnimatePresence>
         </motion.div>
 
-        {/* ── How it works ─────────────────────────────────────────────────── */}
+        {/* How it works */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -346,42 +411,30 @@ export default function UploadContractPage() {
           <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-widest mb-6 text-center">
             How it works
           </p>
-
           <div className="grid md:grid-cols-3 gap-4 relative">
-            {/* Connector lines (desktop) */}
             <div className="hidden md:flex absolute top-[52px] left-[33%] right-[33%] items-center pointer-events-none z-0">
               <div className="flex-1 h-px bg-gradient-to-r from-[#2563EB]/40 to-[#00D4A8]/40" />
               <div className="mx-4 flex-1 h-px bg-gradient-to-r from-[#00D4A8]/40 to-transparent" />
             </div>
-
             {[
               {
-                icon: Upload,
-                color: "#2563EB",
-                bg: "bg-[#2563EB]/10",
-                border: "border-[#2563EB]/20",
-                step: "01",
-                title: "Upload Contract",
+                icon: Upload, color: "#2563EB",
+                bg: "bg-[#2563EB]/10", border: "border-[#2563EB]/20",
+                step: "01", title: "Upload Contract",
                 desc: "Drop your PDF or image — we support all common lease and loan formats.",
                 delay: 0,
               },
               {
-                icon: Zap,
-                color: "#00D4A8",
-                bg: "bg-[#00D4A8]/10",
-                border: "border-[#00D4A8]/20",
-                step: "02",
-                title: "AI Analysis",
+                icon: Zap, color: "#00D4A8",
+                bg: "bg-[#00D4A8]/10", border: "border-[#00D4A8]/20",
+                step: "02", title: "AI Analysis",
                 desc: "Our AI reads every clause, flags red flags, and scores contract fairness.",
                 delay: 0.1,
               },
               {
-                icon: ShieldCheck,
-                color: "#10B981",
-                bg: "bg-emerald-500/10",
-                border: "border-emerald-500/20",
-                step: "03",
-                title: "Get Insights",
+                icon: ShieldCheck, color: "#10B981",
+                bg: "bg-emerald-500/10", border: "border-emerald-500/20",
+                step: "03", title: "Get Insights",
                 desc: "Receive a fairness score, negotiation script, and actionable tips.",
                 delay: 0.2,
               },
@@ -395,22 +448,12 @@ export default function UploadContractPage() {
                 className="group relative z-10 rounded-2xl border bg-[#111827]/70 backdrop-blur-sm p-6 transition-all duration-300 hover:border-white/[0.12] cursor-default"
                 style={{ borderColor: "rgba(255,255,255,0.06)" }}
               >
-                {/* Step badge */}
-                <div className="absolute top-4 right-4 text-[10px] font-bold text-[#374151] tracking-wider">
-                  {step}
-                </div>
-
-                {/* Icon */}
-                <div className={`w-12 h-12 rounded-xl ${bg} border ${border} flex items-center justify-center mb-4 group-hover:shadow-lg transition-shadow`}
-                  style={{ boxShadow: `0 0 0 0 ${color}` }}
-                >
+                <div className="absolute top-4 right-4 text-[10px] font-bold text-[#374151] tracking-wider">{step}</div>
+                <div className={`w-12 h-12 rounded-xl ${bg} border ${border} flex items-center justify-center mb-4 group-hover:shadow-lg transition-shadow`}>
                   <Icon className="w-5 h-5" style={{ color }} />
                 </div>
-
                 <h3 className="font-bold text-white text-sm mb-1.5">{title}</h3>
                 <p className="text-[#6B7280] text-xs leading-relaxed">{desc}</p>
-
-                {/* Bottom accent */}
                 <motion.div
                   initial={{ scaleX: 0 }}
                   whileHover={{ scaleX: 1 }}

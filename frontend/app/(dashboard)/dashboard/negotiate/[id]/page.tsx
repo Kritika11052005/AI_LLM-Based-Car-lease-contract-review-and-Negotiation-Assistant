@@ -1,12 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 // app/(dashboard)/dashboard/negotiate/[id]/page.tsx
-//
-// Reached via: router.push(`/dashboard/negotiate/${contractId}`)
-// Auto-pipeline on mount:
-//   1. POST /api/negotiation/analyze/{id}   → intents stored in DB + analysis
-//   2. POST /api/negotiation/script/{id}    → negotiation script + threadId
-//   3. Drop straight into the chat UI with script pre-loaded
 
 import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -264,7 +258,6 @@ function MessageRenderer({ message }: { message: ChatMessage }) {
     );
   }
 
-  // script message gets special formatting
   if (message.type === "script") {
     return (
       <motion.div
@@ -338,7 +331,6 @@ export default function NegotiateContractPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const hasRun = useRef(false);
 
   // ── scroll to bottom ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -360,47 +352,52 @@ export default function NegotiateContractPage() {
   // 2. If yes → load it directly, skip the pipeline entirely (saves API calls)
   // 3. If no  → run full extract → analyze → script pipeline
   useEffect(() => {
-    if (!contractId || hasRun.current) return;
-    hasRun.current = true;
+    if (!contractId) return;
 
     const run = async () => {
       try {
-        // ── Check for an existing thread for this contract ───────────────────────
+        // ── Check for an existing thread for this contract ──────────────────
         console.log("[Pipeline] Checking for existing thread for", contractId);
         const threadsRes = await api.get("/negotiation/threads");
         const allThreads: Conversation[] = threadsRes.data ?? [];
         const existing = allThreads.find((t) => t.contractId === contractId);
 
         if (existing) {
-          console.log("[Pipeline] Existing thread found:", existing.id, "— skipping pipeline");
+          console.log("[Pipeline] ✅ Existing thread found:", existing.id, "— loading messages");
+
           const msgRes = await api.get(`/negotiation/threads/${existing.id}/messages`);
           const loadedMsgs: ChatMessage[] = msgRes.data?.messages ?? [];
 
           setThreadId(existing.id);
           setActiveConversationId(existing.id);
 
-          // Prepend a banner only if there are no messages to show
-          const banner: ChatMessage = {
-            id: "restored-banner",
-            type: "text",
-            content: "♻️ Restored your previous negotiation for this contract. Ask a follow-up or request a fresh script anytime.",
-            timestamp: new Date().toISOString(),
-          };
-          setMessages(loadedMsgs.length > 0 ? loadedMsgs : [banner]);
+          if (loadedMsgs.length > 0) {
+            setMessages(loadedMsgs);
+          } else {
+            setMessages([{
+              id: "restored-banner",
+              type: "text",
+              content: "♻️ Restored your previous negotiation for this contract. Ask a follow-up or request a fresh script anytime.",
+              timestamp: new Date().toISOString(),
+            }]);
+          }
+
           setPipelineStatus("done");
           return; // ← skip pipeline entirely
         }
 
         console.log("[Pipeline] No existing thread — running fresh pipeline");
       } catch (checkErr) {
-        // Thread check failed — safe to proceed with pipeline
-        console.warn("[Pipeline] Thread check failed, running pipeline:", checkErr);
+        // Thread check failed — log but proceed with pipeline
+        console.warn("[Pipeline] Thread check error (proceeding with pipeline):", checkErr);
       }
 
+      // ── Fresh pipeline ────────────────────────────────────────────────────
       setPipelineStatus("running");
 
       try {
-        // Step 0: Extract / confirm SLA from DB
+        // Step 0: Extract / confirm SLA
+        // Backend skips re-extraction if SLA already exists in DB (fast path)
         setCurrentStep(0);
         console.log("[Pipeline] Step 0: extracting SLA for", contractId);
         await backendAPI.post(API_ENDPOINTS.CONTRACTS.EXTRACT_SLA(contractId));
@@ -468,7 +465,6 @@ export default function NegotiateContractPage() {
         setMessages([contextMsg, scriptMsg, followupMsg]);
         refetchThreads();
       } catch (err: any) {
-        // Log full error details to console for debugging
         console.error("[NegotiatePipeline] Error:", {
           status:   err?.response?.status,
           url:      err?.config?.url,
@@ -479,7 +475,6 @@ export default function NegotiateContractPage() {
 
         setPipelineStatus("error");
 
-        // Extract the most meaningful error message available
         const errMsg =
           err?.response?.data?.detail ??
           err?.response?.data?.message ??
@@ -488,14 +483,12 @@ export default function NegotiateContractPage() {
           `HTTP ${err?.response?.status ?? "unknown"} on ${err?.config?.url ?? "unknown endpoint"}`;
 
         toast.error(errMsg);
-        setMessages([
-          {
-            id: "error-msg",
-            type: "error",
-            content: `Pipeline failed at step ${currentStep + 1}/3.\n\n${errMsg}\n\nCheck the browser console for the full error details.`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+        setMessages([{
+          id: "error-msg",
+          type: "error",
+          content: `Pipeline failed at step ${currentStep + 1}/3.\n\n${errMsg}\n\nCheck the browser console for the full error details.`,
+          timestamp: new Date().toISOString(),
+        }]);
       }
     };
 

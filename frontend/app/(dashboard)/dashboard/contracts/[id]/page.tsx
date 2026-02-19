@@ -30,12 +30,12 @@ import type { Contract } from "@/types/contract";
 
 // ── animation variants ─────────────────────────────────────────────────────────
 const pageVariants = {
-  hidden:  { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
 };
 
 const sectionVariants = {
-  hidden:  { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 30 },
   visible: (i: number) => ({
     opacity: 1, y: 0,
     transition: { duration: 0.55, ease: "easeOut", delay: i * 0.12 },
@@ -98,8 +98,8 @@ function Section({
 
 // ── main page ──────────────────────────────────────────────────────────────────
 export default function ContractDetailPage() {
-  const params     = useParams();
-  const router     = useRouter();
+  const params = useParams();
+  const router = useRouter();
   const contractId = params.id as string;
 
   const { data: contract, isLoading, error } = useQuery<Contract>({
@@ -134,15 +134,24 @@ export default function ContractDetailPage() {
     );
   }
 
-  const sla     = contract.sla;
+  const sla = contract.sla;
   const vehicle = contract.vehicle;
   const hasVehicleInfo = vehicle && (vehicle.year || vehicle.make || vehicle.model);
   const vinOnly = vehicle && !hasVehicleInfo && vehicle.vin;
 
   // dealer price for the price bar marker
+  // NEW CODE with fallbacks:
   const dealerPrice =
     sla?.capCost != null ? Number(sla.capCost) :
-    sla?.msrp    != null ? Number(sla.msrp)    : null;
+      sla?.msrp != null ? Number(sla.msrp) :
+        // Fallback 1: Use residual value (good proxy for vehicle value in leases)
+        sla?.residualValue != null ? Number(sla.residualValue) :
+          // Fallback 2: Use purchase option price
+          sla?.purchaseOptionPrice != null ? Number(sla.purchaseOptionPrice) :
+            // Fallback 3: Rough estimate from total payments
+            sla?.monthlyPayment != null && sla?.termMonths != null
+              ? Number(sla.monthlyPayment) * sla.termMonths + (Number(sla.downPayment) || 0)
+              : null;
 
   return (
     <>
@@ -287,20 +296,22 @@ export default function ContractDetailPage() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
                   {[
-                    { label: "Make",           value: vehicle.make },
-                    { label: "Model",          value: vehicle.model },
-                    { label: "Year",           value: vehicle.year?.toString() },
-                    { label: "Trim",           value: vehicle.trim },
-                    { label: "VIN",            value: vehicle.vin, mono: true },
-                    { label: "Body Type",      value: vehicle.bodyClass },
-                    { label: "Engine",         value: vehicle.engine },
-                    { label: "Drivetrain",     value: vehicle.drivetrain },
-                    { label: "Fuel Type",      value: vehicle.fuelType },
+                    { label: "Make", value: vehicle.make },
+                    { label: "Model", value: vehicle.model },
+                    { label: "Year", value: vehicle.year?.toString() },
+                    { label: "Trim", value: vehicle.trim },
+                    { label: "VIN", value: vehicle.vin, mono: true },
+                    { label: "Body Type", value: vehicle.bodyClass },
+                    { label: "Engine", value: vehicle.engine },
+                    { label: "Drivetrain", value: vehicle.drivetrain },
+                    { label: "Fuel Type", value: vehicle.fuelType },
                     { label: "Exterior Color", value: vehicle.colorExt },
                     { label: "Interior Color", value: vehicle.colorInt },
-                    { label: "Odometer",       value: vehicle.odometerMiles
+                    {
+                      label: "Odometer", value: vehicle.odometerMiles
                         ? `${Number(vehicle.odometerMiles).toLocaleString()} miles`
-                        : undefined },
+                        : undefined
+                    },
                   ]
                     .filter((f) => f.value)
                     .map((f, i) => (
@@ -362,15 +373,25 @@ export default function ContractDetailPage() {
                     </h3>
                     <div className="space-y-0">
                       {[
-                        { label: "Down Payment",    value: formatCurrency(Number(sla.downPayment) || 0) },
-                        { label: "Monthly Payment", value: formatCurrency(Number(sla.monthlyPayment) || 0) },
-                        { label: "Residual Value",  value: formatCurrency(Number(sla.residualValue) || 0) },
-                        { label: "Purchase Option", value: formatCurrency(Number(sla.purchaseOptionPrice) || 0) },
+                        { label: "MSRP", value: sla.msrp ? formatCurrency(Number(sla.msrp)) : "N/A" },
+                        { label: "Cap Cost", value: sla.capCost ? formatCurrency(Number(sla.capCost)) : "N/A" },
+                        { label: "Cap Cost Reduction", value: sla.capCostReduction ? formatCurrency(Number(sla.capCostReduction)) : "N/A" },
+                        { label: "Down Payment", value: sla.downPayment ? formatCurrency(Number(sla.downPayment)) : "N/A" },
+                        { label: "Monthly Payment", value: sla.monthlyPayment ? formatCurrency(Number(sla.monthlyPayment)) : "N/A" },
+                        { label: "Fees Total", value: sla.feesTotal ? formatCurrency(Number(sla.feesTotal)) : "N/A" },
+                        { label: "Residual Value", value: sla.residualValue ? formatCurrency(Number(sla.residualValue)) : "N/A" },
+                        { label: "Residual % of MSRP", value: sla.residualPercentMsrp ? `${Number(sla.residualPercentMsrp).toFixed(1)}%` : "N/A" },
+                        { label: "Purchase Option", value: sla.purchaseOptionPrice ? formatCurrency(Number(sla.purchaseOptionPrice)) : "N/A" },
+                        { label: "APR", value: sla.aprPercent ? `${Number(sla.aprPercent).toFixed(2)}%` : "N/A" },
+                        { label: "Money Factor", value: sla.moneyFactor ? Number(sla.moneyFactor).toFixed(5) : "N/A" },
+                        { label: "Term", value: sla.termMonths ? `${sla.termMonths} months` : "N/A" },
                       ].map((row, i) => (
                         <div key={i}
                           className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors px-1 rounded">
                           <span className="text-xs text-slate-500">{row.label}</span>
-                          <span className="text-sm font-semibold text-slate-200">{row.value}</span>
+                          <span className={`text-sm font-semibold ${row.value === "N/A" ? "text-slate-600" : "text-slate-200"}`}>
+                            {row.value}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -384,42 +405,44 @@ export default function ContractDetailPage() {
                     </h3>
                     <div className="space-y-0">
                       {[
-                        { label: "Annual Mileage",    value: sla.mileageAllowanceYr ? `${sla.mileageAllowanceYr.toLocaleString()} km` : "N/A" },
-                        { label: "Overage Fee",       value: sla.mileageOverageFee ? `₹${Number(sla.mileageOverageFee).toFixed(2)}/km` : "N/A" },
+                        { label: "Annual Mileage", value: sla.mileageAllowanceYr ? `${sla.mileageAllowanceYr.toLocaleString()} km` : "N/A" },
+                        { label: "Overage Fee", value: sla.mileageOverageFee ? `₹${Number(sla.mileageOverageFee).toFixed(2)}/km` : "N/A" },
                         { label: "Early Termination", value: sla.earlyTerminationFee ? formatCurrency(Number(sla.earlyTerminationFee)) : "N/A" },
-                        { label: "Disposition Fee",   value: sla.dispositionFee ? formatCurrency(Number(sla.dispositionFee)) : "N/A" },
+                        { label: "Disposition Fee", value: sla.dispositionFee ? formatCurrency(Number(sla.dispositionFee)) : "N/A" },
                       ].map((row, i) => (
                         <div key={i}
                           className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors px-1 rounded">
                           <span className="text-xs text-slate-500">{row.label}</span>
-                          <span className="text-sm font-semibold text-slate-200">{row.value}</span>
+                          <span className={`text-sm font-semibold ${row.value === "N/A" ? "text-slate-600" : "text-slate-200"}`}>
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Additional Terms inline */}
+                    <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mt-6 mb-4">
+                      <FileText className="w-4 h-4 text-slate-400" />
+                      Obligations & Coverage
+                    </h3>
+                    <div className="space-y-0">
+                      {[
+                        { label: "Insurance", value: sla.insuranceRequirements ?? "N/A" },
+                        { label: "Maintenance", value: sla.maintenanceResp ?? "N/A" },
+                        { label: "Warranty", value: sla.warrantySummary ?? "N/A" },
+                        { label: "Late Fee", value: sla.lateFeePolicy ?? "N/A" },
+                      ].map((row, i) => (
+                        <div key={i}
+                          className="flex justify-between items-start gap-4 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors px-1 rounded">
+                          <span className="text-xs text-slate-500 shrink-0">{row.label}</span>
+                          <span className={`text-xs text-right font-medium ${row.value === "N/A" ? "text-slate-600" : "text-slate-300"}`}>
+                            {row.value}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </Card>
                 </div>
-              </Section>
-
-              {/* Additional Terms */}
-              <Section index={9}>
-                <Card className="p-6 border-white/8 bg-slate-900/40">
-                  <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
-                    <FileText className="w-4 h-4 text-slate-400" />
-                    Additional Terms
-                  </h3>
-                  <div className="grid md:grid-cols-3 gap-6">
-                    {[
-                      { label: "Maintenance",  value: sla.maintenanceResp },
-                      { label: "Warranty",     value: sla.warrantySummary },
-                      { label: "Late Fee",     value: sla.lateFeePolicy },
-                    ].map((item) => (
-                      <div key={item.label}>
-                        <p className="text-xs text-slate-500 mb-1.5">{item.label}</p>
-                        <p className="text-sm text-slate-300">{item.value || "Not specified"}</p>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
               </Section>
             </>
           )}

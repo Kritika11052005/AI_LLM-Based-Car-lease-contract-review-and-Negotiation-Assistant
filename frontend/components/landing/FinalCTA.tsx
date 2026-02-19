@@ -4,8 +4,11 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 export default function FinalCTA() {
+  const router = useRouter();
+  const { user } = useAuth();
   return (
     <section className="relative py-32 px-4 overflow-hidden">
       {/* Background effects */}
@@ -63,18 +66,19 @@ export default function FinalCTA() {
               transition={{ duration: 0.8, delay: 0.4 }}
             >
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Link href="/login" >
-                <Button
-                  size="lg"
-                  className="bg-gradient-to-r from-[hsl(var(--color-primary))] to-[hsl(var(--color-secondary))] hover:from-[hsl(var(--color-primary))]/80 hover:to-[hsl(var(--color-secondary))]/80 text-white px-10 py-7 text-lg relative group overflow-hidden"
-                >
-                  <span className="relative z-10 flex items-center gap-2">
-                    Get Started for Free
-                    <ArrowRight className="w-5 h-5" />
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-[hsl(var(--color-secondary))] to-[hsl(var(--color-primary))] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                </Button>
-                </Link>
+                
+                  <Button
+                    size="lg"
+                    onClick={() => router.push(user ? '/dashboard' : '/login')}
+                    className="bg-gradient-to-r from-[hsl(var(--color-primary))] to-[hsl(var(--color-secondary))] hover:from-[hsl(var(--color-primary))]/80 hover:to-[hsl(var(--color-secondary))]/80 text-white px-10 py-7 text-lg relative group overflow-hidden"
+                  >
+                    <span className="relative z-10 flex items-center gap-2">
+                      Get Started for Free
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[hsl(var(--color-secondary))] to-[hsl(var(--color-primary))] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  </Button>
+                
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -95,7 +99,7 @@ export default function FinalCTA() {
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.5 }}
             >
-              
+
             </motion.div>
           </div>
         </div>

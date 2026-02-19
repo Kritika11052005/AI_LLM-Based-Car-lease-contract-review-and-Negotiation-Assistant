@@ -10,21 +10,21 @@ import {
   TrendingDown, 
   FileText, 
   AlertTriangle, 
-  DollarSign,
+  CheckCircle2,
   Activity,
   Sparkles,
   ArrowUpRight,
   Upload,
   MessageSquare,
   ChevronRight,
-  Eye
+  Eye,
+  AlertCircle
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { DashboardAnalytics } from "@/types/dashboard";
-import { formatIndianCurrency } from "@/lib/utils";
 import Particles from "@/components/Particles";
 
 interface DashboardClientProps {
@@ -55,7 +55,7 @@ export function DashboardClient({ analytics, userName }: DashboardClientProps) {
 
       {/* Dashboard Content */}
       <div className="relative z-10 p-4 md:p-8 space-y-8">
-        {/* Welcome Header - Moved to right to avoid sidebar overlap */}
+        {/* Welcome Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -92,21 +92,20 @@ export function DashboardClient({ analytics, userName }: DashboardClientProps) {
                 delay={0.1}
               />
               <KPICard
-                title="Estimated Savings"
-                value={analytics.kpi_summary.estimated_savings_identified}
-                prefix="₹"
-                trend={analytics.kpi_summary.trends.savings_trend}
-                icon={DollarSign}
-                color="from-[#00D4A8] to-[#0891B2]"
+                title="Items Need Action"
+                value={analytics.kpi_summary.actionable_items}
+                trend={analytics.kpi_summary.trends.actionable_items_trend}
+                icon={AlertCircle}
+                color="from-[#F59E0B] to-[#D97706]"
                 delay={0.2}
-                formatValue
+                invertTrend={true}
               />
               <KPICard
-                title="High-Risk Clauses"
-                value={analytics.kpi_summary.total_high_risk_clauses}
-                trend={analytics.kpi_summary.trends.risk_trend}
-                icon={AlertTriangle}
-                color="from-[#EF4444] to-[#DC2626]"
+                title="Contracts This Month"
+                value={analytics.kpi_summary.contracts_this_month}
+                trend={analytics.kpi_summary.trends.contracts_this_month_trend}
+                icon={FileText}
+                color="from-[#7C3AED] to-[#6D28D9]"
                 delay={0.3}
               />
             </div>
@@ -117,7 +116,7 @@ export function DashboardClient({ analytics, userName }: DashboardClientProps) {
             )}
 
             {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 ">
               {/* Fairness Trend Chart */}
               {analytics.fairness_trend.length > 0 && (
                 <FairnessTrendChart data={analytics.fairness_trend} />
@@ -127,9 +126,9 @@ export function DashboardClient({ analytics, userName }: DashboardClientProps) {
               <RiskDistributionChart distribution={analytics.risk_distribution} />
             </div>
 
-            {/* Savings Insight & Recent Activity Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SavingsInsightPanel insight={analytics.savings_insight} />
+            {/* Risk Overview & Recent Activity Row - Move closer to charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 -mt-0.5">
+              <RiskOverviewPanel overview={analytics.risk_overview} />
               <RecentActivityFeed activities={analytics.recent_activities} />
             </div>
           </>
@@ -150,7 +149,8 @@ function KPICard({
   icon: Icon, 
   color, 
   delay,
-  formatValue = false
+  formatValue = false,
+  invertTrend = false
 }: {
   title: string;
   value: number;
@@ -161,6 +161,7 @@ function KPICard({
   color: string;
   delay: number;
   formatValue?: boolean;
+  invertTrend?: boolean;
 }) {
   const [displayValue, setDisplayValue] = useState(0);
 
@@ -187,6 +188,11 @@ function KPICard({
     ? displayValue.toLocaleString('en-IN')
     : displayValue;
 
+  // For actionable items, lower is better, so invert trend colors
+  const isPositiveTrend = invertTrend ? trend < 0 : trend > 0;
+  const trendColor = isPositiveTrend ? 'text-[#10B981]' : 'text-[#EF4444]';
+  const TrendIcon = isPositiveTrend ? TrendingUp : TrendingDown;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -200,8 +206,8 @@ function KPICard({
               <Icon className="w-6 h-6 text-white" />
             </div>
             {trend !== 0 && (
-              <div className={`flex items-center gap-1 text-sm ${trend > 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-                {trend > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+              <div className={`flex items-center gap-1 text-sm ${trendColor}`}>
+                <TrendIcon className="w-4 h-4" />
                 <span>{Math.abs(trend)}%</span>
               </div>
             )}
@@ -288,7 +294,7 @@ function LatestContractCard({ contract }: { contract: any }) {
 
             {/* AI Confidence */}
             <div className="space-y-2">
-              <p className="text-sm text-[#9CA3AF]">AI Confidence</p>
+              <p className="text-sm text-[#9CA3AF]">AI-SLA Extraction Confidence</p>
               <p className="text-2xl font-bold">{contract.ai_confidence_percentage}%</p>
               <Progress value={contract.ai_confidence_percentage} className="h-2" />
             </div>
@@ -348,7 +354,6 @@ function LatestContractCard({ contract }: { contract: any }) {
 }
 
 function FairnessTrendChart({ data }: { data: any[] }) {
-  // Sort by date ascending (oldest to newest)
   const sortedData = [...data].sort((a, b) => 
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
@@ -415,7 +420,6 @@ function RiskDistributionChart({ distribution }: { distribution: any }) {
     innerRadius,
     outerRadius,
     percent,
-    name,
   }: any) => {
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -476,7 +480,6 @@ function RiskDistributionChart({ distribution }: { distribution: any }) {
             </PieChart>
           </ResponsiveContainer>
           
-          {/* Legend */}
           <div className="flex items-center justify-center gap-4 mt-4 flex-wrap">
             {data.map((entry, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -496,48 +499,64 @@ function RiskDistributionChart({ distribution }: { distribution: any }) {
   );
 }
 
-function SavingsInsightPanel({ insight }: { insight: any }) {
+function RiskOverviewPanel({ overview }: { overview: any }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.7 }}
     >
-      <Card className="bg-gradient-to-br from-[#111827] to-[#1F2937] border-[#00D4A8]/30">
+      <Card className="bg-gradient-to-br from-[#111827] to-[#1F2937] border-[#F59E0B]/30">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-[#00D4A8]" />
-            Savings Intelligence
+            <AlertTriangle className="w-5 h-5 text-[#F59E0B]" />
+            Risk Overview
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 bg-[#0B1220] rounded-lg border border-[#00D4A8]/20">
-            <p className="text-2xl font-bold text-[#00D4A8]">
-              {formatIndianCurrency(insight.estimated_overpayment)}
+          {/* Summary */}
+          <div className="p-4 bg-[#0B1220] rounded-lg border border-[#F59E0B]/20">
+            <p className="text-sm text-[#9CA3AF] mb-2">Status</p>
+            <p className={`text-lg font-semibold ${
+              overview.contracts_needing_attention > 0 ? 'text-[#F59E0B]' : 'text-[#10B981]'
+            }`}>
+              {overview.summary}
             </p>
-            <p className="text-sm text-[#9CA3AF] mt-1">Potential Savings</p>
           </div>
 
-          {insight.average_apr_above_market > 0 && (
-            <div className="flex items-start gap-3 p-3 bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-[#F59E0B] flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-sm">APR Above Market</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">
-                  Your average APR is {insight.average_apr_above_market.toFixed(2)}% higher than market rate
-                </p>
+          {/* Risk Breakdown */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Portfolio Breakdown:</p>
+            
+            {overview.high_risk_contracts > 0 && (
+              <div className="flex items-center justify-between p-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-[#EF4444]" />
+                  <span className="text-sm">High Risk Contracts</span>
+                </div>
+                <Badge variant="destructive">{overview.high_risk_contracts}</Badge>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Negotiation Leverage Points:</p>
-            {insight.negotiation_leverage_points.map((point: string, index: number) => (
-              <div key={index} className="flex items-center gap-2 text-sm text-[#9CA3AF]">
-                <ChevronRight className="w-4 h-4 text-[#00D4A8]" />
-                {point}
+            {overview.medium_risk_contracts > 0 && (
+              <div className="flex items-center justify-between p-3 bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-[#F59E0B]" />
+                  <span className="text-sm">Medium Risk Contracts</span>
+                </div>
+                <Badge className="bg-[#F59E0B]">{overview.medium_risk_contracts}</Badge>
               </div>
-            ))}
+            )}
+
+            {overview.low_risk_contracts > 0 && (
+              <div className="flex items-center justify-between p-3 bg-[#10B981]/10 border border-[#10B981]/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
+                  <span className="text-sm">Low Risk Contracts</span>
+                </div>
+                <Badge className="bg-[#10B981]">{overview.low_risk_contracts}</Badge>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

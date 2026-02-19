@@ -13,9 +13,8 @@ export const backendAPI: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000,
+  timeout: 120000, // ← change from 30000 to 120000 (2 minutes)
 });
-
 /**
  * Axios instance for FRONTEND (Next.js API routes - port 3000)
  * Used for: Authentication + Contract fetching (SSR)

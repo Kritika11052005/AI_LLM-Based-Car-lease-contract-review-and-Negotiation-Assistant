@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Upload, Play, Sparkles } from 'lucide-react';
 import { BackgroundBeams } from '../ui/background-beams';
 import { TypewriterEffectSmooth } from '../ui/typewriter-effect';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import * as THREE from 'three';
 
 const CAR_CONFIG = {
@@ -21,10 +23,10 @@ const CAR_CONFIG = {
 
 function CarModel() {
   const gltf = useGLTF('/models/car.glb');
-  
+
   return (
-    <primitive 
-      object={gltf.scene} 
+    <primitive
+      object={gltf.scene}
       scale={CAR_CONFIG.scale}
       position={[0, CAR_CONFIG.positionY, 0]}
       rotation={[0, 0, 0]}
@@ -36,14 +38,14 @@ function CameraRig() {
   useFrame(({ camera, clock }) => {
     const time = clock.getElapsedTime() * 0.2;
     const radius = CAR_CONFIG.cameraDistance;
-    
+
     camera.position.x = Math.sin(time) * radius;
     camera.position.z = Math.cos(time) * radius;
     camera.position.y = CAR_CONFIG.cameraHeight;
-    
+
     camera.lookAt(0, CAR_CONFIG.positionY, 0);
   });
-  
+
   return null;
 }
 
@@ -85,7 +87,8 @@ function Counter({ end, suffix = '', prefix = '', label }: { end: number; suffix
 export default function Hero() {
   const [key, setKey] = useState(0);
   const [showLine2, setShowLine2] = useState(false);
-
+  const router = useRouter();
+  const { user } = useAuth();
   // Split into two lines for better fit
   const line1 = [
     { text: "Stop" },
@@ -167,7 +170,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
-            Upload your car lease contract and let AI uncover hidden fees, unfair terms, 
+            Upload your car lease contract and let AI uncover hidden fees, unfair terms,
             and negotiation opportunities in seconds.
           </motion.p>
 
@@ -181,6 +184,7 @@ export default function Hero() {
               <Button
                 size="lg"
                 className="bg-primary hover:bg-primary/80 text-primary-foreground px-8 py-6 text-lg relative group overflow-hidden"
+                onClick={() => router.push(user ? '/dashboard/upload' : '/login')}
               >
                 <Upload className="mr-2" />
                 <span className="relative z-10">Analyze My Contract</span>
@@ -229,7 +233,7 @@ export default function Hero() {
                 <spotLight position={[-5, 10, 0]} angle={0.4} penumbra={1} intensity={1} />
                 <pointLight position={[5, 2, 5]} intensity={1} color="#2563eb" />
                 <pointLight position={[-5, 2, -5]} intensity={0.8} color="#00d4a8" />
-                
+
                 <Environment preset="city" />
                 <CarModel />
                 <CameraRig />

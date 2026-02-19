@@ -51,6 +51,10 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
     orderBy: { createdAt: "desc" },
   });
 
+  // 🔍 DEBUG: Log what we're finding
+  console.log("\n📊 DASHBOARD DEBUG:");
+  console.log(`Total contracts: ${contracts.length}`);
+
   const totalContracts = contracts.length;
   const fairnessScores = contracts
     .filter((c) => c.fairnessScore)
@@ -60,96 +64,30 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
       ? fairnessScores.reduce((a, b) => a + b, 0) / fairnessScores.length
       : 0;
 
-  const highRiskClauses = contracts.reduce((count, contract) => {
-    const highRisk = contract.extractions.reduce((extractionCount, extraction) => {
-      return (
-        extractionCount +
-        extraction.extractedClauses.filter((clause) => clause.redFlagLevel === "high").length
-      );
-    }, 0);
-    return count + highRisk;
-  }, 0);
+  // ── Calculate Contracts This Month ──────────────────────────────────────────
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const contractsThisMonth = contracts.filter((c) => c.createdAt >= thirtyDaysAgo).length;
 
-  // ── FIXED SAVINGS: Calculate from real SLA data ────────────────────────────
-  const contractsWithSLA = contracts.filter((c) => c.sla);
-  
-  // India market benchmarks
-  const MARKET_APR = 9.0;
-  const BENCHMARK_DISPOSITION_FEE = 5000;
-  const BENCHMARK_EARLY_TERM_FEE = 10000;
-  const BENCHMARK_MILEAGE_OVERAGE = 3.0;
+  console.log(`📅 Contracts This Month: ${contractsThisMonth}`);
 
-  let totalSavings = 0;
-  const leveragePoints: string[] = [];
-  
-  let totalAPR = 0;
-  let aprCount = 0;
-  let highDispositionCount = 0;
-  let highTermFeeCount = 0;
+  // ── Calculate Actionable Items ──────────────────────────────────────────────
+  const actionableItems = contracts.filter((contract) => {
+    const hasHighRiskClauses = contract.extractions.some((extraction) =>
+      extraction.extractedClauses.some((clause) => clause.redFlagLevel === "high")
+    );
 
-  contractsWithSLA.forEach((c) => {
-    const sla = c.sla!;
-    
-    // APR analysis
-    const apr = Number(sla.aprPercent || 0);
-    if (apr > 0) {
-      totalAPR += apr;
-      aprCount++;
-      
-      if (apr > MARKET_APR) {
-        const monthlyPayment = Number(sla.monthlyPayment || 0);
-        const termMonths = sla.termMonths || 36;
-        const aprDiff = apr - MARKET_APR;
-        const savings = (aprDiff / 100) * (monthlyPayment * termMonths) / 2;
-        totalSavings += savings;
-      }
-    }
+    const lowFairnessScore = contract.fairnessScore && Number(contract.fairnessScore) < 60;
 
-    // Disposition fee
-    const dispositionFee = Number(sla.dispositionFee || 0);
-    if (dispositionFee > BENCHMARK_DISPOSITION_FEE) {
-      totalSavings += (dispositionFee - BENCHMARK_DISPOSITION_FEE);
-      highDispositionCount++;
-    }
+    return hasHighRiskClauses || lowFairnessScore;
+  }).length;
 
-    // Early termination fee
-    const earlyTermFee = Number(sla.earlyTerminationFee || 0);
-    if (earlyTermFee > BENCHMARK_EARLY_TERM_FEE) {
-      totalSavings += (earlyTermFee - BENCHMARK_EARLY_TERM_FEE);
-      highTermFeeCount++;
-    }
-
-    // Mileage overage
-    const overageFee = Number(sla.mileageOverageFee || 0);
-    if (overageFee > BENCHMARK_MILEAGE_OVERAGE) {
-      totalSavings += (overageFee - BENCHMARK_MILEAGE_OVERAGE) * 2000;
-    }
-  });
-
-  const avgAPR = aprCount > 0 ? totalAPR / aprCount : 0;
-  const aprAboveMarket = Math.max(0, avgAPR - MARKET_APR);
-
-  // Build actionable leverage points
-  if (avgAPR > MARKET_APR + 0.5) {
-    leveragePoints.push(`Negotiate APR from ${avgAPR.toFixed(1)}% down to ${MARKET_APR}%`);
-  }
-  if (highDispositionCount > 0) {
-    leveragePoints.push(`Reduce disposition fee by ₹${BENCHMARK_DISPOSITION_FEE.toLocaleString('en-IN')}`);
-  }
-  if (highTermFeeCount > 0) {
-    leveragePoints.push(`Lower early termination penalty`);
-  }
-  if (leveragePoints.length === 0) {
-    leveragePoints.push("Request additional mileage allowance");
-    leveragePoints.push("Negotiate lower acquisition fees");
-  }
-
-  const estimatedSavings = Math.round(totalSavings);
+  console.log(`📋 Actionable Items: ${actionableItems}`);
 
   // ── Latest Contract ──────────────────────────────────────────────────────────
   const latestContract = contracts[0] || null;
   let latestContractData = null;
-  
+
   if (latestContract) {
     const allClauses = latestContract.extractions.flatMap((e) => e.extractedClauses);
     const topRedFlags = allClauses
@@ -175,7 +113,16 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
       upload_date: latestContract.createdAt.toISOString(),
       fairness_score: score,
       risk_level: getRiskFromScore(score),
-      ai_confidence_percentage: 85,
+      ai_confidence_percentage: (() => {
+        const sla = latestContract.sla;
+        const fields = [
+          sla?.aprPercent, sla?.monthlyPayment, sla?.downPayment,
+          sla?.termMonths, sla?.residualValue, sla?.mileageAllowanceYr,
+          sla?.earlyTerminationFee, sla?.mileageOverageFee,
+          sla?.purchaseOptionPrice, sla?.lateFeePolicy,
+        ];
+        return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+      })(),
       top_red_flags: topRedFlags as {
         title: string;
         description: string;
@@ -196,7 +143,7 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
     contract_id: c.id,
   }));
 
-  // ── FIXED: Risk Distribution from fairness scores ───────────────────────────
+  // ── Risk Distribution from fairness scores ───────────────────────────────────
   const riskCounts = { high: 0, medium: 0, low: 0 };
   contracts.forEach((c) => {
     const risk = getRiskFromScore(c.fairnessScore ? Number(c.fairnessScore) : null);
@@ -209,12 +156,15 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
     low_risk: riskCounts.low,
   };
 
-  // ── Savings Insight ──────────────────────────────────────────────────────────
-  const savingsInsight = {
-    average_apr_above_market: aprAboveMarket,
-    estimated_overpayment: estimatedSavings,
-    negotiation_leverage_points: leveragePoints,
-    potential_savings_summary: `You could save approximately ₹${estimatedSavings.toLocaleString("en-IN")} by negotiating better terms`,
+  // ── Risk Overview ────────────────────────────────────────────────────────────
+  const riskOverview = {
+    high_risk_contracts: riskCounts.high,
+    medium_risk_contracts: riskCounts.medium,
+    low_risk_contracts: riskCounts.low,
+    contracts_needing_attention: actionableItems,
+    summary: actionableItems > 0
+      ? `${actionableItems} contract${actionableItems > 1 ? 's' : ''} require${actionableItems === 1 ? 's' : ''} immediate attention`
+      : "All contracts are in good standing"
   };
 
   // ── Recent Activities (top 3 contracts) ──────────────────────────────────────
@@ -228,9 +178,6 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
   }));
 
   // ── Calculate Trends ─────────────────────────────────────────────────────────
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const contractsThisMonth = contracts.filter((c) => c.createdAt >= thirtyDaysAgo).length;
   const previousPeriodStart = new Date(thirtyDaysAgo);
   previousPeriodStart.setDate(previousPeriodStart.getDate() - 30);
   const contractsPreviousMonth = contracts.filter(
@@ -241,23 +188,55 @@ async function getDashboardAnalytics(userId: string): Promise<DashboardAnalytics
       ? ((contractsThisMonth - contractsPreviousMonth) / contractsPreviousMonth) * 100
       : 0;
 
+  // Calculate contracts this month trend
+  const contractsThisMonthTrend = contractsTrend;
+
+  // Calculate actionable items trend
+  const actionableItemsThisMonth = contracts.filter((contract) => {
+    if (contract.createdAt < thirtyDaysAgo) return false;
+
+    const hasHighRiskClauses = contract.extractions.some((extraction) =>
+      extraction.extractedClauses.some((clause) => clause.redFlagLevel === "high")
+    );
+    const lowFairnessScore = contract.fairnessScore && Number(contract.fairnessScore) < 60;
+
+    return hasHighRiskClauses || lowFairnessScore;
+  }).length;
+
+  const actionableItemsPrevMonth = contracts.filter((contract) => {
+    if (contract.createdAt >= thirtyDaysAgo || contract.createdAt < previousPeriodStart) return false;
+
+    const hasHighRiskClauses = contract.extractions.some((extraction) =>
+      extraction.extractedClauses.some((clause) => clause.redFlagLevel === "high")
+    );
+    const lowFairnessScore = contract.fairnessScore && Number(contract.fairnessScore) < 60;
+
+    return hasHighRiskClauses || lowFairnessScore;
+  }).length;
+
+  const actionableItemsTrend = actionableItemsPrevMonth > 0
+    ? ((actionableItemsThisMonth - actionableItemsPrevMonth) / actionableItemsPrevMonth) * 100
+    : 0;
+
+  console.log("\n✅ Analytics Complete\n");
+
   return {
     kpi_summary: {
       total_contracts_analyzed: totalContracts,
       average_fairness_score: Math.round(averageFairnessScore),
-      estimated_savings_identified: estimatedSavings,
-      total_high_risk_clauses: highRiskClauses,
+      actionable_items: actionableItems,
+      contracts_this_month: contractsThisMonth,
       trends: {
         contracts_trend: Math.round(contractsTrend),
         fairness_trend: 0,
-        savings_trend: 0,
-        risk_trend: 0,
+        actionable_items_trend: Math.round(actionableItemsTrend),
+        contracts_this_month_trend: Math.round(contractsThisMonthTrend),
       },
     },
     latest_contract: latestContractData,
     fairness_trend: fairnessTrend,
     risk_distribution: riskDistribution,
-    savings_insight: savingsInsight,
+    risk_overview: riskOverview,
     recent_activities: activities,
   };
 }

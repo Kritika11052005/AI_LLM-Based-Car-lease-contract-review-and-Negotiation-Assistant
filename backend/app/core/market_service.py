@@ -97,9 +97,18 @@ async def predict_price(
     year: Optional[int],
     trim: Optional[str] = None,
     miles: int = 50_000,
+    car_type: str = "used",  # ✅ FIX: Required by MarketCheck API
 ) -> Optional[dict]:
     """
     Call /v2/predict/car/price.
+
+    Args:
+        make: Vehicle make (required)
+        model: Vehicle model (required)
+        year: Vehicle year (required)
+        trim: Vehicle trim (optional)
+        miles: Mileage for valuation (default: 50,000)
+        car_type: "used" or "new" (default: "used")
 
     Returns:
         {
@@ -123,6 +132,7 @@ async def predict_price(
         "model": model,
         "year":  year,
         "miles": miles,
+        "car_type": car_type,  # ✅ FIX: Added required parameter
     }
     if trim:
         params["trim"] = trim

@@ -1,118 +1,81 @@
 "use client";
 // components/contract/PriceEstimation.tsx
-// Calls POST /api/market/enrich/{id} — MarketCheck price + fairness pipeline
+// MarketCheck price analysis with live USD → INR conversion
 
 import { useQuery } from "@tanstack/react-query";
 import { backendAPI } from "@/lib/api";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
-import { DollarSign, TrendingUp, TrendingDown, Info, BarChart2 } from "lucide-react";
+import { RefreshCw, Info, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { EnrichContractResponse } from "@/types/contract";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 
 interface Props {
   contractId: string;
-  dealerPrice?: number | null; // passed from ContractDetailPage via sla.capCost / sla.msrp
+  dealerPrice?: number | null;
 }
 
-// ── over/under badge ───────────────────────────────────────────────────────────
-function DeltaBadge({ pct }: { pct: number }) {
-  const over = pct > 0;
-  return (
-    <motion.span
-      initial={{ scale: 0.7, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.6 }}
-      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
-        over
-          ? "bg-red-500/15 text-red-400 border-red-500/30"
-          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-      }`}
-    >
-      {over ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      {over ? "+" : ""}{pct.toFixed(1)}%{" "}
-      {over ? "Overpriced" : "Below Market"}
-    </motion.span>
-  );
+// ── Fetch live USD to INR exchange rate ─────────────────────────────────────────
+async function fetchExchangeRate(): Promise<number> {
+  try {
+    const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const data = await response.json();
+    return data.rates.INR || 83.5; // fallback to 83.5 if API fails
+  } catch (error) {
+    console.warn('Exchange rate API failed, using fallback:', error);
+    return 83.5; // static fallback
+  }
 }
 
-// ── horizontal price bar ───────────────────────────────────────────────────────
-function PriceBar({
-  low,
-  high,
-  predicted,
-  dealer,
-}: {
-  low: number;
-  high: number;
-  predicted: number;
-  dealer: number | null;
-}) {
-  const range = high - low || 1;
-
-  const pctOf = (v: number) => Math.max(0, Math.min(100, ((v - low) / range) * 100));
-  const predictedPct = pctOf(predicted);
-  const dealerPct    = dealer != null ? pctOf(dealer) : null;
-
-  return (
-    <div className="mt-6 mb-2">
-      {/* labels */}
-      <div className="flex justify-between text-xs text-slate-500 mb-2">
-        <span>Market Low<br /><span className="text-slate-300 font-semibold">{formatCurrency(low)}</span></span>
-        <span className="text-center">Market Avg<br /><span className="text-slate-300 font-semibold">{formatCurrency(predicted)}</span></span>
-        <span className="text-right">Market High<br /><span className="text-slate-300 font-semibold">{formatCurrency(high)}</span></span>
-      </div>
-
-      {/* track */}
-      <div className="relative h-3 rounded-full bg-white/6 overflow-visible">
-        {/* filled range */}
-        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500/30 via-amber-500/30 to-red-500/30" />
-
-        {/* predicted avg marker */}
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-0.5 h-5 bg-white/40 rounded-full"
-          style={{ left: `${predictedPct}%` }}
-        />
-
-        {/* dealer price marker — animates in */}
-        {dealerPct != null && (
-          <motion.div
-            className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center"
-            style={{ left: `${dealerPct}%` }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: "easeOut", delay: 0.5 }}
-          >
-            <div className="w-3 h-3 rounded-full bg-violet-400 border-2 border-white shadow-[0_0_8px_rgba(167,139,250,0.8)] -translate-y-0.5" />
-            <span className="absolute top-5 text-[10px] text-violet-300 font-bold whitespace-nowrap">
-              Dealer {formatCurrency(dealer!)}
-            </span>
-          </motion.div>
-        )}
-      </div>
-    </div>
-  );
+function convertToINR(usdPrice: number, rate: number): number {
+  return Math.round(usdPrice * rate);
 }
 
 // ── main export ────────────────────────────────────────────────────────────────
 export function PriceEstimation({ contractId, dealerPrice }: Props) {
-  const { data, isLoading, error } = useQuery<EnrichContractResponse>({
+  // Fetch exchange rate (cached for 1 hour)
+  const { data: exchangeRate = 83.5 } = useQuery<number>({
+    queryKey: ['usd-inr-rate'],
+    queryFn: fetchExchangeRate,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
+  const { data, isLoading, error, refetch, isRefetching } = useQuery<EnrichContractResponse>({
     queryKey: ["market-enrich", contractId],
     queryFn: async () => {
-      const r = await backendAPI.post(`api/market/enrich/${contractId}`);
+      const r = await backendAPI.post(`/api/market/enrich/${contractId}`);
       return r.data;
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   if (isLoading) {
     return (
       <Card className="p-6 border-white/8 bg-slate-900/60">
-        <div className="flex items-center gap-3 mb-4">
-          <Skeleton className="w-8 h-8 rounded-full bg-white/5" />
-          <Skeleton className="h-5 w-48 bg-white/5" />
+        <div className="flex items-center justify-between mb-6">
+          <Skeleton className="h-6 w-48 bg-white/5" />
+          <Skeleton className="h-10 w-32 bg-white/5" />
         </div>
-        <Skeleton className="h-40 w-full bg-white/5 rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 bg-white/5" />
+          ))}
+        </div>
+        <Skeleton className="h-64 w-full bg-white/5" />
       </Card>
     );
   }
@@ -122,122 +85,301 @@ export function PriceEstimation({ contractId, dealerPrice }: Props) {
       <Card className="p-6 border-amber-500/20 bg-amber-500/5">
         <div className="flex items-center gap-3 text-amber-400">
           <Info className="w-5 h-5 shrink-0" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium">Market data unavailable</p>
             <p className="text-xs text-slate-500 mt-0.5">
               MarketCheck couldn&apos;t retrieve pricing for this vehicle.
-              Contract fairness was still scored using term benchmarks.
+              This may happen if the VIN is invalid or the vehicle is too new/old.
             </p>
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
+            Retry
+          </Button>
         </div>
       </Card>
     );
   }
 
-  const { market_data, fairness_breakdown, vehicle_data } = data;
-  const predicted = market_data.predicted_price!;
-  const low       = market_data.price_range?.low ?? predicted * 0.85;
-  const high      = market_data.price_range?.high ?? predicted * 1.15;
+  const { market_data } = data;
 
-  // dealer price: prefer prop, fall back to anything reasonable
-  const dealer = dealerPrice ?? null;
+  // Convert USD prices to INR using live rate
+  const predictedUSD = market_data.predicted_price!;
+  const lowUSD = market_data.price_range?.low ?? predictedUSD * 0.85;
+  const highUSD = market_data.price_range?.high ?? predictedUSD * 1.15;
 
-  // over/under percent vs predicted
-  const deltaPct =
-    dealer != null ? ((dealer - predicted) / predicted) * 100 : null;
+  const predictedINR = convertToINR(predictedUSD, exchangeRate);
+  const lowINR = convertToINR(lowUSD, exchangeRate);
+  const highINR = convertToINR(highUSD, exchangeRate);
 
-  const vehicleLabel = vehicle_data
-    ? [vehicle_data.year, vehicle_data.make, vehicle_data.model, vehicle_data.trim]
-        .filter(Boolean)
-        .join(" ")
-    : null;
+  // Dealer price is already in INR
+  const dealerINR = dealerPrice ?? null;
+
+  // Price difference calculation
+  const priceDiff = dealerINR != null ? dealerINR - predictedINR : 0;
+  const priceDiffPct = dealerINR != null ? ((priceDiff / predictedINR) * 100) : 0;
+
+  // Fairness score
+  const fairnessScore = data.fairness_breakdown?.final_score ?? 0;
+
+  // ✅ Chart data - now includes BOTH dealer price and market price
+  const chartData = [
+    {
+      name: "Dealer Price",
+      value: dealerINR ?? 0,
+      fill: "#8B5CF6", // violet
+    },
+    {
+      name: "Market Avg",
+      value: predictedINR,
+      fill: "#3B82F6", // blue
+    },
+  ];
 
   return (
     <motion.div
-      className="space-y-4"
-      initial={{ opacity: 0, y: 24 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, ease: "easeOut" }}
+      transition={{ duration: 0.5 }}
     >
-      {/* ── Main price card ──────────────────────────────────────────────── */}
-      <Card className="p-6 border-white/8 bg-gradient-to-br from-blue-500/8 to-cyan-500/5 backdrop-blur-sm">
-        <div className="flex items-start justify-between flex-wrap gap-3 mb-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
-              <BarChart2 className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-white text-sm">Market Price Analysis</h3>
-              {vehicleLabel && (
-                <p className="text-xs text-slate-500 mt-0.5">{vehicleLabel}</p>
-              )}
+      <Card className="p-6 border-white/8 bg-slate-900/40 backdrop-blur-sm">
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Market Analysis</h3>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Compare your contract against current market data
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="border-white/10 text-slate-300 hover:bg-white/5"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
+            Refresh Data
+          </Button>
+        </div>
+
+        {/* ── Metric Cards ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Dealer Price */}
+          <MetricCard
+            label="DEALER PRICE"
+            value={formatCurrency(dealerINR ?? 0)}
+            subtitle="From contract"
+            delay={0}
+          />
+
+          {/* Market Average */}
+          <MetricCard
+            label="MARKET AVERAGE"
+            value={formatCurrency(predictedINR)}
+            subtitle="Market estimate"
+            delay={0.1}
+          />
+
+          {/* Price Difference */}
+          <MetricCard
+            label="PRICE DIFFERENCE"
+            value={`${priceDiff >= 0 ? '+' : ''}${Math.abs(priceDiffPct).toFixed(1)}%`}
+            subtitle="vs market average"
+            valueColor={priceDiff > 0 ? "text-red-400" : priceDiff < 0 ? "text-emerald-400" : "text-slate-300"}
+            icon={priceDiff > 0 ? TrendingUp : priceDiff < 0 ? TrendingDown : undefined}
+            delay={0.2}
+          />
+
+          {/* Fairness Score */}
+          <MetricCard
+            label="FAIRNESS SCORE"
+            value={`${Math.round(fairnessScore)}/100`}
+            subtitle="Overall rating"
+            valueColor={
+              fairnessScore >= 80 ? "text-emerald-400" :
+                fairnessScore >= 60 ? "text-amber-400" : "text-red-400"
+            }
+            delay={0.3}
+          />
+        </div>
+
+        {/* ── Price Comparison Chart ─────────────────────────────────────── */}
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-slate-300 mb-1">Price Comparison</h4>
+            <p className="text-xs text-slate-500">
+              Your contract price compared to current market listings
+            </p>
+          </div>
+
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
+                <XAxis
+                  dataKey="name"
+                  stroke="#9CA3AF"
+                  fontSize={12}
+                  tick={{ fill: '#9CA3AF' }}
+                />
+                <YAxis
+                  stroke="#9CA3AF"
+                  fontSize={12}
+                  tick={{ fill: '#9CA3AF' }}
+                  tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0B1220',  // Darker background matching your theme
+                    border: '1px solid #2563EB',  // Blue border on hover
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                  }}
+                  labelStyle={{
+                    color: '#E5E7EB',  // Light gray for label
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    marginBottom: '4px',
+                  }}
+                  itemStyle={{
+                    color: '#00D4A8',  // Teal/cyan for the price value ✅
+                    fontSize: '14px',
+                    fontWeight: '700',
+                  }}
+                  formatter={(value: number) => [formatCurrency(value), 'Price']}
+                  cursor={{ fill: 'rgba(37, 99, 235, 0.1)' }}  // Light blue bar hover background
+                />
+
+                {/* Market average reference line */}
+                <ReferenceLine
+                  y={predictedINR}
+                  stroke="#3B82F6"
+                  strokeDasharray="5 5"
+                  label={{
+                    value: `Market Avg: ${formatCurrency(predictedINR)}`,
+                    fill: '#3B82F6',
+                    fontSize: 11,
+                    position: 'insideTopRight',
+                  }}
+                />
+
+                <Bar
+                  dataKey="value"
+                  fill="#8B5CF6"  // Violet bar color
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={100}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* ── Market Range Info ──────────────────────────────────────────── */}
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4">
+            <h5 className="text-xs font-semibold text-slate-400 mb-3">Market Range</h5>
+            <div className="flex items-center justify-between text-sm">
+              <div className="text-center">
+                <p className="text-xs text-slate-500 mb-1">Low</p>
+                <p className="font-semibold text-emerald-400">{formatCurrency(lowINR)}</p>
+              </div>
+              <div className="flex-1 mx-4">
+                <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500/30 via-amber-500/30 to-red-500/30 relative">
+                  {/* Dealer price marker */}
+                  {dealerINR != null && (
+                    <motion.div
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                      style={{
+                        left: `${Math.max(0, Math.min(100, ((dealerINR - lowINR) / (highINR - lowINR)) * 100))}%`
+                      }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.5, type: "spring" }}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-violet-400 border-2 border-white shadow-lg" />
+                    </motion.div>
+                  )}
+                  {/* Market average marker */}
+                  <motion.div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                    style={{
+                      left: `${Math.max(0, Math.min(100, ((predictedINR - lowINR) / (highINR - lowINR)) * 100))}%`
+                    }}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.6, type: "spring" }}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-blue-400 border-2 border-white shadow-lg" />
+                  </motion.div>
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500 mb-1">High</p>
+                <p className="font-semibold text-red-400">{formatCurrency(highINR)}</p>
+              </div>
             </div>
           </div>
-          {deltaPct != null && <DeltaBadge pct={deltaPct} />}
-        </div>
 
-        {/* price bar */}
-        <PriceBar low={low} high={high} predicted={predicted} dealer={dealer} />
-
-        {/* three-col stat row */}
-        <div className="grid grid-cols-3 gap-4 mt-8 pt-4 border-t border-white/6">
-          <Stat label="Market Low"  value={formatCurrency(low)}       color="text-emerald-400" />
-          <Stat label="Predicted"   value={formatCurrency(predicted)}  color="text-blue-400" center />
-          <Stat label="Market High" value={formatCurrency(high)}       color="text-red-400" right />
+          {/* ── Data Sources ───────────────────────────────────────────────── */}
+          <div className="flex items-start gap-2 text-xs text-slate-500 pt-2">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-slate-400">Data Sources</p>
+              <ul className="list-disc list-inside mt-1 space-y-0.5">
+                <li>MarketCheck Price Prediction (USD)</li>
+                <li>Live exchange rate: 1 USD = ₹{exchangeRate.toFixed(2)} INR</li>
+                <li>Rate updated hourly via exchangerate-api.com</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </Card>
-
-      {/* ── Fairness breakdown scores ─────────────────────────────────────── */}
-      {fairness_breakdown && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="p-5 border-white/8 bg-slate-900/40">
-            <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
-              <DollarSign className="w-4 h-4 text-cyan-400" />
-              Fairness Sub-Scores
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <SubScore label="Price"  score={fairness_breakdown.price_score} color="text-violet-400" />
-              <SubScore label="APR"    score={fairness_breakdown.apr_score}   color="text-blue-400" />
-              <SubScore label="Fees"   score={fairness_breakdown.fees_score}  color="text-cyan-400" />
-              <SubScore label="Term"   score={fairness_breakdown.term_score}  color="text-teal-400" />
-            </div>
-            <div className="mt-4 pt-3 border-t border-white/6 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Blended Fairness Score</span>
-              <span className="text-lg font-black text-white">
-                {fairness_breakdown.final_score.toFixed(1)}
-                <span className="text-xs text-slate-500 font-normal ml-1">/ 100</span>
-              </span>
-            </div>
-          </Card>
-        </motion.div>
-      )}
     </motion.div>
   );
 }
 
-// ── helper sub-components ──────────────────────────────────────────────────────
-function Stat({
-  label, value, color, center, right,
+// ── Metric Card Component ──────────────────────────────────────────────────────
+function MetricCard({
+  label,
+  value,
+  subtitle,
+  valueColor = "text-white",
+  icon: Icon,
+  delay = 0,
 }: {
-  label: string; value: string; color: string; center?: boolean; right?: boolean;
+  label: string;
+  value: string;
+  subtitle: string;
+  valueColor?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  delay?: number;
 }) {
   return (
-    <div className={center ? "text-center" : right ? "text-right" : ""}>
-      <p className="text-[11px] text-slate-500 mb-1">{label}</p>
-      <p className={`text-sm font-bold ${color}`}>{value}</p>
-    </div>
-  );
-}
-
-function SubScore({ label, score, color }: { label: string; score: number; color: string }) {
-  return (
-    <div className="p-3 rounded-xl bg-white/4 border border-white/6 text-center">
-      <p className="text-[11px] text-slate-500 mb-1">{label}</p>
-      <p className={`text-xl font-black ${color}`}>{Math.round(score)}</p>
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay }}
+      className="rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-sm p-4 hover:bg-white/[0.04] transition-colors"
+    >
+      <p className="text-[10px] font-semibold text-slate-500 tracking-wider mb-2">
+        {label}
+      </p>
+      <div className="flex items-baseline gap-2">
+        <p className={`text-2xl font-black ${valueColor} tracking-tight`}>
+          {value}
+        </p>
+        {Icon && <Icon className={`w-4 h-4 ${valueColor}`} />}
+      </div>
+      <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+    </motion.div>
   );
 }

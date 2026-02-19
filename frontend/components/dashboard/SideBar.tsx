@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname,useRouter} from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,7 +33,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-
+  const router = useRouter();
   const toggleSidebar = () => setIsOpen(!isOpen);
 
   return (
@@ -86,7 +86,7 @@ export function Sidebar() {
           {/* Logo */}
           <div className="mb-12 animate-fade-in">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-[#B19EEF] to-[#5227FF] bg-clip-text text-transparent">
-              AI Lease
+              LeaseGaurd
             </h1>
             <p className="text-sm text-gray-400 mt-1">Negotiation Assistant</p>
           </div>
@@ -170,6 +170,7 @@ export function Sidebar() {
               onClick={() => {
                 logout();
                 toggleSidebar();
+                router.push("/");
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 hover:bg-red-500/10 hover:translate-x-2 group"
             >
