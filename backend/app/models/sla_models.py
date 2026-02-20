@@ -23,6 +23,7 @@ class SLAData(BaseModel):
 
     # ── Vehicle value fields ─────────────────────────────────────────────
     msrp: Optional[str] = Field(None, description="MSRP in INR")
+    dealer_price: Optional[str] = Field(None, description="Dealer asking/selling price in INR")  # ✅ NEW FIELD
     cap_cost: Optional[str] = Field(None, description="Capitalized cost in INR")
     cap_cost_reduction: Optional[str] = Field(None, description="Cap cost reduction in INR")
     residual_value: Optional[str] = Field(None, description="Residual value in INR")
@@ -107,6 +108,7 @@ class SLAData(BaseModel):
             "downPayment": parse_inr_to_decimal(self.down_payment),
             "feesTotal": parse_inr_to_decimal(self.fees_total),
             "msrp": parse_inr_to_decimal(self.msrp),
+            "dealerPrice": parse_inr_to_decimal(self.dealer_price),  # ✅ NEW FIELD
             "capCost": parse_inr_to_decimal(self.cap_cost),
             "capCostReduction": parse_inr_to_decimal(self.cap_cost_reduction),
             "residualValue": parse_inr_to_decimal(self.residual_value),
@@ -158,6 +160,7 @@ class SLAData(BaseModel):
                 "monthly_payment": "₹47,776",  # Converted from $572
                 "down_payment": "₹4,88,080",   # Converted from $5,843
                 "msrp": "₹17,36,800",          # Converted from $20,800
+                "dealer_price": "₹16,50,000",  # ✅ NEW - Dealer asking price
                 "cap_cost": "₹16,28,250",      # Converted from $19,500
                 "cap_cost_reduction": "₹1,25,250",
                 "residual_value": "₹7,81,560",

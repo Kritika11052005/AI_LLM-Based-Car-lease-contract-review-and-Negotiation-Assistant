@@ -28,6 +28,7 @@ export interface ContractSLA {
   residualValue?: number | null;
   residualPercentMsrp?: number | null;
   msrp?: number | null;
+  dealerPrice?:number |null;
   capCost?: number | null;
   capCostReduction?: number | null;
   mileageAllowanceYr?: number | null;

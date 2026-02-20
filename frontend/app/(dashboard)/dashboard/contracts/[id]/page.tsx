@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
+import { downloadContractReport } from "@/lib/downloadContractReport";
 import { FairnessScoreCard } from "@/components/contract/FairnessScoreCard";
 import { PriceEstimation } from "@/components/contract/PriceEstimation";
 import {
@@ -141,7 +142,7 @@ export default function ContractDetailPage() {
 
   // dealer price for the price bar marker
   // NEW CODE with fallbacks:
-  const dealerPrice =
+  const dealer = sla?.dealerPrice != null ? Number(sla.dealerPrice) :
     sla?.capCost != null ? Number(sla.capCost) :
       sla?.msrp != null ? Number(sla.msrp) :
         // Fallback 1: Use residual value (good proxy for vehicle value in leases)
@@ -214,14 +215,15 @@ export default function ContractDetailPage() {
                 <Badge className="bg-white/5 border border-white/10 text-slate-300 text-xs">
                   {contract.docStatus || "Processing"}
                 </Badge>
-                <Button variant="outline" size="sm"
-                  className="border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-all">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadContractReport(contract)}
+                  className="border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                >
                   <Download className="w-4 h-4 mr-2" />Download
                 </Button>
-                <Button variant="outline" size="sm"
-                  className="border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-all">
-                  <Share2 className="w-4 h-4 mr-2" />Share
-                </Button>
+
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                   <Button size="sm"
                     onClick={() => router.push(`/dashboard/negotiate/${contractId}`)}
@@ -250,7 +252,7 @@ export default function ContractDetailPage() {
               <MetricCard
                 index={3} icon={Calendar} iconColor="text-purple-400"
                 label="Term" gradient="from-purple-500/10 to-pink-500/5"
-                value={sla.termMonths ? `${sla.termMonths} mo` : "N/A"}
+                value={sla.termMonths ? `${sla.termMonths} months` : "N/A"}
               />
               <MetricCard
                 index={4} icon={TrendingUp} iconColor="text-orange-400"
@@ -281,7 +283,7 @@ export default function ContractDetailPage() {
               </div>
               <h2 className="text-xl font-bold text-white">Price & Market Analysis</h2>
             </div>
-            <PriceEstimation contractId={contractId} dealerPrice={dealerPrice} />
+            <PriceEstimation contractId={contractId} dealerPrice={dealer} />
           </Section>
 
           {/* ── Vehicle Info ─────────────────────────────────────────────── */}

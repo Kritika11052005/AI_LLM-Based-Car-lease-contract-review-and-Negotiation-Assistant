@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  FileText, 
-  AlertTriangle, 
+import {
+  TrendingUp,
+  TrendingDown,
+  FileText,
+  AlertTriangle,
   CheckCircle2,
   Activity,
   Sparkles,
@@ -140,14 +140,14 @@ export function DashboardClient({ analytics, userName }: DashboardClientProps) {
   );
 }
 
-function KPICard({ 
-  title, 
-  value, 
-  prefix = '', 
-  suffix = '', 
-  trend, 
-  icon: Icon, 
-  color, 
+function KPICard({
+  title,
+  value,
+  prefix = '',
+  suffix = '',
+  trend,
+  icon: Icon,
+  color,
   delay,
   formatValue = false,
   invertTrend = false
@@ -170,7 +170,7 @@ function KPICard({
     const steps = 60;
     const increment = value / steps;
     let current = 0;
-    
+
     const timer = setInterval(() => {
       current += increment;
       if (current >= value) {
@@ -184,7 +184,7 @@ function KPICard({
     return () => clearInterval(timer);
   }, [value]);
 
-  const formattedValue = formatValue 
+  const formattedValue = formatValue
     ? displayValue.toLocaleString('en-IN')
     : displayValue;
 
@@ -242,7 +242,7 @@ function LatestContractCard({ contract }: { contract: any }) {
               </CardTitle>
               <p className="text-[#9CA3AF]">{contract.contract_name}</p>
             </div>
-            <Badge 
+            <Badge
               variant={contract.risk_level === 'high' ? 'destructive' : contract.risk_level === 'medium' ? 'default' : 'secondary'}
               className="text-sm"
             >
@@ -273,8 +273,8 @@ function LatestContractCard({ contract }: { contract: any }) {
                     fill="none"
                     strokeLinecap="round"
                     initial={{ strokeDasharray: "0 351.68" }}
-                    animate={{ 
-                      strokeDasharray: `${(contract.fairness_score / 100) * 351.68} 351.68` 
+                    animate={{
+                      strokeDasharray: `${(contract.fairness_score / 100) * 351.68} 351.68`
                     }}
                     transition={{ duration: 1, delay: 0.5 }}
                   />
@@ -321,15 +321,14 @@ function LatestContractCard({ contract }: { contract: any }) {
               </p>
               <div className="space-y-2">
                 {contract.top_red_flags.map((flag: any, index: number) => (
-                  <div 
+                  <div
                     key={index}
                     className="p-3 bg-[#0B1220] rounded-lg border border-[#1F2937] flex items-start gap-3"
                   >
-                    <div className={`w-2 h-2 rounded-full mt-2 ${
-                      flag.severity === 'high' ? 'bg-[#EF4444]' : 
-                      flag.severity === 'medium' ? 'bg-[#F59E0B]' : 
-                      'bg-[#10B981]'
-                    }`} />
+                    <div className={`w-2 h-2 rounded-full mt-2 ${flag.severity === 'high' ? 'bg-[#EF4444]' :
+                      flag.severity === 'medium' ? 'bg-[#F59E0B]' :
+                        'bg-[#10B981]'
+                      }`} />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{flag.title}</p>
                       <p className="text-xs text-[#9CA3AF] mt-1">{flag.description}</p>
@@ -340,7 +339,7 @@ function LatestContractCard({ contract }: { contract: any }) {
             </div>
           )}
 
-          <Button 
+          <Button
             onClick={() => router.push(`/dashboard/contracts/${contract.id}`)}
             className="w-full bg-gradient-to-r from-[#2563EB] to-[#00D4A8] hover:opacity-90"
           >
@@ -354,10 +353,10 @@ function LatestContractCard({ contract }: { contract: any }) {
 }
 
 function FairnessTrendChart({ data }: { data: any[] }) {
-  const sortedData = [...data].sort((a, b) => 
+  const sortedData = [...data].sort((a, b) =>
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
-  
+
   const chartData = sortedData.map(d => ({
     date: new Date(d.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
     score: d.fairness_score
@@ -382,17 +381,17 @@ function FairnessTrendChart({ data }: { data: any[] }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
               <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
               <YAxis stroke="#9CA3AF" fontSize={12} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#111827', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#111827',
                   border: '1px solid #1F2937',
                   borderRadius: '8px'
                 }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="score" 
-                stroke="#2563EB" 
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke="#2563EB"
                 strokeWidth={3}
                 dot={{ fill: '#2563EB', r: 4 }}
                 activeDot={{ r: 6 }}
@@ -470,21 +469,24 @@ function RiskDistributionChart({ distribution }: { distribution: any }) {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#111827', 
-                  border: '1px solid #1F2937',
-                  borderRadius: '8px'
+
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#111827',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
                 }}
+                labelStyle={{ color: '#f1f5f9', fontWeight: 600 }}
+                itemStyle={{ color: '#94a3b8' }}
               />
             </PieChart>
           </ResponsiveContainer>
-          
+
           <div className="flex items-center justify-center gap-4 mt-4 flex-wrap">
             {data.map((entry, index) => (
               <div key={index} className="flex items-center gap-2">
-                <div 
-                  className="w-3 h-3 rounded-full" 
+                <div
+                  className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: entry.color }}
                 />
                 <span className="text-sm text-[#9CA3AF]">
@@ -517,9 +519,8 @@ function RiskOverviewPanel({ overview }: { overview: any }) {
           {/* Summary */}
           <div className="p-4 bg-[#0B1220] rounded-lg border border-[#F59E0B]/20">
             <p className="text-sm text-[#9CA3AF] mb-2">Status</p>
-            <p className={`text-lg font-semibold ${
-              overview.contracts_needing_attention > 0 ? 'text-[#F59E0B]' : 'text-[#10B981]'
-            }`}>
+            <p className={`text-lg font-semibold ${overview.contracts_needing_attention > 0 ? 'text-[#F59E0B]' : 'text-[#10B981]'
+              }`}>
               {overview.summary}
             </p>
           </div>
@@ -527,7 +528,7 @@ function RiskOverviewPanel({ overview }: { overview: any }) {
           {/* Risk Breakdown */}
           <div className="space-y-3">
             <p className="text-sm font-medium">Portfolio Breakdown:</p>
-            
+
             {overview.high_risk_contracts > 0 && (
               <div className="flex items-center justify-between p-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -566,7 +567,7 @@ function RiskOverviewPanel({ overview }: { overview: any }) {
 
 function RecentActivityFeed({ activities }: { activities: any[] }) {
   const router = useRouter();
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -584,7 +585,7 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {activities.length > 0 ? (
               activities.map((activity) => (
-                <div 
+                <div
                   key={activity.id}
                   className="flex items-start gap-3 p-3 bg-[#0B1220] rounded-lg border border-[#1F2937] hover:border-[#2563EB]/50 transition-colors group"
                 >

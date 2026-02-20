@@ -257,6 +257,7 @@ model ContractSLA {
   residualValue         Decimal?  @db.Decimal(12,2) @map("residual_value")
   residualPercentMsrp   Decimal?  @db.Decimal(6,3) @map("residual_percent_msrp")
   msrp                  Decimal?  @db.Decimal(12,2)
+  dealerPrice           Decimal?  @db.Decimal(12,2) @map("dealer_price")
   capCost               Decimal?  @db.Decimal(12,2) @map("cap_cost")
   capCostReduction      Decimal?  @db.Decimal(12,2) @map("cap_cost_reduction")
   mileageAllowanceYr    Int?      @map("mileage_allowance_yr")

@@ -2,7 +2,7 @@
 
 import { Sidebar } from "@/components/dashboard/SideBar";
 import Galaxy from '@/components/Galaxy';
-
+import LoadingSpinner from "@/components/shared/LoadingSpinner"
 export default function DashboardLayout({
   children,
 }: {
@@ -33,6 +33,7 @@ export default function DashboardLayout({
 
       {/* Main Content */}
       <main className="min-h-screen">
+        <LoadingSpinner/>
         {children}
       </main>
     </>

@@ -85,10 +85,11 @@ export function Sidebar() {
         <div className="flex flex-col h-full p-8">
           {/* Logo */}
           <div className="mb-12 animate-fade-in">
+            <Link href="/">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-[#B19EEF] to-[#5227FF] bg-clip-text text-transparent">
               LeaseGaurd
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">Negotiation Assistant</p>
+            </h1></Link>
+            <p className="text-sm text-gray-400 mt-1">Car Lease Review and Negotiation Assistant</p>
           </div>
 
           {/* User Info */}

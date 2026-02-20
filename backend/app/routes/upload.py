@@ -227,6 +227,7 @@ async def extract_sla(contract_id: str, db: Prisma = Depends(get_db)):
             "downPayment":           parse_decimal(sla_dict.get("down_payment")),
             "feesTotal":             parse_decimal(sla_dict.get("fees_total")),
             "msrp":                  parse_decimal(sla_dict.get("msrp")),
+            "dealerPrice":           parse_decimal(sla_dict.get("dealer_price")),  # ✅ NEW FIELD
             "capCost":               parse_decimal(sla_dict.get("cap_cost")),
             "capCostReduction":      parse_decimal(sla_dict.get("cap_cost_reduction")),
             "residualValue":         parse_decimal(sla_dict.get("residual_value")),
@@ -272,6 +273,7 @@ async def extract_sla(contract_id: str, db: Prisma = Depends(get_db)):
                 "all_prices_in_inr": True,
                 "fields_saved": {
                     "msrp":               _f(sla.msrp) if sla else None,
+                    "dealer_price":       _f(sla.dealerPrice) if sla else None,  # ✅ NEW FIELD
                     "cap_cost":           _f(sla.capCost) if sla else None,
                     "apr_percent":        _f(sla.aprPercent) if sla else None,
                     "term_months":        sla.termMonths if sla else None,

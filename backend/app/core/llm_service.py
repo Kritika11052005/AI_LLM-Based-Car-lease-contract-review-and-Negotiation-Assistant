@@ -2,6 +2,12 @@
 LangChain + RAG Enhanced LLM Service for SLA Extraction
 ========================================================
 Automatically converts USD prices to INR before storing in database.
+NOW INCLUDES: dealer_price extraction
+
+Rate limiting:
+  - Gemini LLM calls  → LIMITERS["gemini"]      (token-bucket, 1 req/s sustained)
+  - Exchange Rate API → LIMITERS["exchangerate"] (token-bucket, 1 req/5 s)
+  Both limiters gracefully return fallbacks on exhaustion — no crash.
 
 Install:
     pip install langchain-core langchain-text-splitters langchain-google-genai \
@@ -23,6 +29,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 from langchain_community.vectorstores import FAISS
 
 from app.models.sla_models import SLAData
+from app.core.rate_limiter import LIMITERS, RateLimitError
 
 load_dotenv()
 
@@ -37,13 +44,20 @@ _CACHED_EXCHANGE_RATE: Optional[float] = None
 async def fetch_usd_to_inr_rate() -> float:
     """
     Fetch live USD to INR exchange rate from exchangerate-api.com.
-    Cached in memory. Fallback to 83.5 if API fails.
+    Cached in memory. Fallback to 83.5 if API fails or rate-limited.
     """
     global _CACHED_EXCHANGE_RATE
-    
+
     if _CACHED_EXCHANGE_RATE is not None:
         return _CACHED_EXCHANGE_RATE
-    
+
+    # ── rate limit ─────────────────────────────────────────────────────────────
+    try:
+        await LIMITERS["exchangerate"].acquire()
+    except RateLimitError as exc:
+        print(f"⚠️  ExchangeRate API rate-limited (retry after {exc.retry_after:.1f}s) — using fallback 83.5")
+        return 83.5
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get('https://api.exchangerate-api.com/v4/latest/USD')
@@ -62,27 +76,24 @@ def detect_currency_and_parse(value_str: str) -> tuple[Optional[float], str]:
     """
     Detect currency symbol and parse amount.
     Returns: (amount, currency) where currency is 'USD', 'INR', or 'UNKNOWN'
-    
+
     Examples:
         "$20,800" → (20800.0, 'USD')
-        "₹9,360" → (9360.0, 'INR')
-        "572" → (572.0, 'UNKNOWN')
-        "Rs 5000" → (5000.0, 'INR')
+        "₹9,360"  → (9360.0,  'INR')
+        "572"     → (572.0,   'UNKNOWN')
+        "Rs 5000" → (5000.0,  'INR')
     """
     if not value_str or not isinstance(value_str, str):
         return None, 'UNKNOWN'
-    
-    # Detect currency
+
     currency = 'UNKNOWN'
     if '$' in value_str:
         currency = 'USD'
     elif '₹' in value_str or 'Rs' in value_str or 'INR' in value_str.upper():
         currency = 'INR'
-    
-    # Extract numeric value
-    # Remove currency symbols, commas, spaces
+
     cleaned = re.sub(r'[₹$,Rs\sINRUSD]', '', value_str, flags=re.IGNORECASE).strip()
-    
+
     try:
         amount = float(cleaned)
         return amount, currency
@@ -96,35 +107,38 @@ async def convert_to_inr(value_str: str, exchange_rate: float) -> Optional[str]:
     - If already in INR (₹), return as-is
     - If in USD ($), convert to INR
     - If no currency symbol, assume INR (Indian market default)
-    
+
     Returns: String in format "₹X,XXX" or None
     """
     if not value_str or not isinstance(value_str, str):
         return None
-    
+
     amount, currency = detect_currency_and_parse(value_str)
-    
+
     if amount is None:
         return None
-    
-    # Convert USD to INR
+
     if currency == 'USD':
         amount_inr = round(amount * exchange_rate, 2)
         print(f"   💵 ${amount:,.2f} → ₹{amount_inr:,.2f}")
         return f"₹{amount_inr:,.0f}"
-    
-    # Already INR or no currency (assume INR)
+
     return f"₹{amount:,.0f}"
 
 
 # ============================================================
-# FIELD QUERIES — maps each SLAData field to search queries
+# FIELD QUERIES
 # ============================================================
 
 FIELD_QUERIES = {
     "msrp": [
         "MSRP manufacturer suggested retail price dealer asking price sticker",
         "vehicle sale price market value gross cap cost",
+    ],
+    "dealer_price": [
+        "dealer price dealer asking price selling price sale price vehicle price",
+        "negotiated price agreed price final price out the door price total vehicle price",
+        "purchase price contract price amount financed vehicle cost dealer cost",
     ],
     "cap_cost": [
         "capitalized cost adjusted cap cost net cap cost gross cap cost",
@@ -206,6 +220,7 @@ FIELD_QUERIES = {
 
 FIELD_DESCRIPTIONS = {
     "msrp":                    "MSRP, dealer asking price, or sticker price (with currency symbol $ or ₹)",
+    "dealer_price":            "Dealer asking price, selling price, or negotiated vehicle price — the actual price you're paying for the vehicle (with currency symbol $ or ₹)",
     "cap_cost":                "Gross or adjusted capitalized cost — agreed vehicle price (with currency symbol $ or ₹)",
     "cap_cost_reduction":      "Capitalized cost reduction — cash down, trade-in, rebates (with currency symbol $ or ₹)",
     "residual_value":          "Residual value or guaranteed future value at lease end (with currency symbol $ or ₹)",
@@ -254,10 +269,9 @@ Valid output examples:
 Return ONLY the JSON. No explanation, no markdown."""
 )
 
-
 # Fields that contain monetary values and need USD→INR conversion
 MONETARY_FIELDS = {
-    "msrp", "cap_cost", "cap_cost_reduction", "residual_value",
+    "msrp", "dealer_price", "cap_cost", "cap_cost_reduction", "residual_value",
     "monthly_payment", "down_payment", "fees_total",
     "early_termination_fee", "disposition_fee", "purchase_option"
 }
@@ -268,6 +282,10 @@ class RAGSLAExtractor:
     RAG-based extractor: builds a FAISS index from the contract text,
     then runs per-field targeted retrieval + Gemini extraction.
     Automatically converts USD prices to INR.
+
+    Each LLM call is gated by LIMITERS["gemini"] (token-bucket).
+    If the Gemini limiter is exhausted the field is skipped (returns None)
+    and extraction continues for remaining fields.
     """
 
     def __init__(self):
@@ -276,7 +294,7 @@ class RAGSLAExtractor:
             raise ValueError("GEMINI_API_KEY not set in environment")
 
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             google_api_key=api_key,
             temperature=0.0,
         )
@@ -307,17 +325,28 @@ class RAGSLAExtractor:
                     results.append(doc.page_content)
         return "\n---\n".join(results)
 
-    def _extract_one(self, field: str, context: str) -> Optional[str]:
+    async def _extract_one(self, field: str, context: str) -> Optional[str]:
+        """
+        Invoke the Gemini chain for a single field.
+        Gated by the 'gemini' rate limiter — returns None if rate-limited.
+        """
+        # ── rate limit ─────────────────────────────────────────────────────────
+        try:
+            await LIMITERS["gemini"].acquire()
+        except RateLimitError as exc:
+            print(f"⚠️  [{field}] Gemini rate-limited (retry after {exc.retry_after:.1f}s) — skipping field")
+            return None
+
         desc = FIELD_DESCRIPTIONS.get(field, field)
         try:
             raw = self.chain.invoke({
-                "field_name": field,
+                "field_name":        field,
                 "field_description": desc,
-                "context": context,
+                "context":           context,
             }).strip()
             raw = re.sub(r"^```json\s*", "", raw)
-            raw = re.sub(r"^```\s*", "", raw)
-            raw = re.sub(r"\s*```$", "", raw)
+            raw = re.sub(r"^```\s*",     "", raw)
+            raw = re.sub(r"\s*```$",     "", raw)
             val = json.loads(raw).get("value")
             if isinstance(val, str) and val.lower() in ("null", "none", "n/a", ""):
                 return None
@@ -336,12 +365,12 @@ class RAGSLAExtractor:
         results = {}
         for field, queries in FIELD_QUERIES.items():
             context = self._retrieve(index, queries)
-            value = self._extract_one(field, context)
-            
+            value   = await self._extract_one(field, context)
+
             # Convert monetary fields from USD to INR if needed
             if value and field in MONETARY_FIELDS:
                 value = await convert_to_inr(value, exchange_rate)
-            
+
             results[field] = value
             print(f"   ✅ {field}: {value}")
 
@@ -365,6 +394,6 @@ class LLMService:
     async def extract_sla_details(contract_text: str) -> SLAData:
         """
         Extract SLA details with automatic USD → INR conversion.
-        NOTE: This is now async due to exchange rate API call.
+        NOTE: This is async due to exchange rate API call + Gemini rate limiting.
         """
         return await LLMService._get_extractor().extract(contract_text)

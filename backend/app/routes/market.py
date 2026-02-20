@@ -6,16 +6,10 @@ Week 7 endpoints — market price estimation + fairness scoring.
 Routes
 ------
 POST /api/market/enrich/{contract_id}
-    Full pipeline: decode VIN → predict price → calculate fairness → save → return.
+    Full pipeline: decode VIN → fetch real market average → calculate fairness → save → return.
 
 GET  /api/market/result/{contract_id}
     Return already-stored market + fairness data for a contract.
-
-Architecture rules followed:
-  • No business logic inside route handlers — all delegated to service/core modules.
-  • MarketCheck failures are caught gracefully; contract data is still returned.
-  • Uses Prisma async client (same pattern as negotiation_routes.py).
-  • Uses dependency injection via get_db().
 """
 
 from __future__ import annotations
@@ -45,8 +39,11 @@ class PriceRangeSchema(BaseModel):
 
 
 class MarketDataSchema(BaseModel):
-    predicted_price: Optional[float] = None
-    price_range:     Optional[PriceRangeSchema] = None
+    predicted_price:  Optional[float] = None
+    price_range:      Optional[PriceRangeSchema] = None
+    listings_sampled: Optional[int]   = None   # ✅ NEW: how many real listings used
+    listings_found:   Optional[int]   = None   # ✅ NEW: total found on MarketCheck
+    source:           Optional[str]   = None   # ✅ NEW: "active_listings" | None
 
 
 class FairnessBreakdownSchema(BaseModel):
@@ -66,25 +63,23 @@ class VehicleDataSchema(BaseModel):
 
 
 class ContractDataSchema(BaseModel):
-    id:            str
-    contract_type: Optional[str] = None
+    id:             str
+    contract_type:  Optional[str]   = None
     fairness_score: Optional[float] = None
-    red_flag_level: Optional[str] = None
+    red_flag_level: Optional[str]   = None
 
 
 class EnrichContractResponse(BaseModel):
-    contract_data:      ContractDataSchema
-    vehicle_data:       Optional[VehicleDataSchema] = None
-    market_data:        Optional[MarketDataSchema]  = None
-    fairness_breakdown: Optional[FairnessBreakdownSchema] = None
-    # Negotiation intents are also returned so frontend can display them
-    negotiation_intents: Optional[list] = None
+    contract_data:       ContractDataSchema
+    vehicle_data:        Optional[VehicleDataSchema]      = None
+    market_data:         Optional[MarketDataSchema]       = None
+    fairness_breakdown:  Optional[FairnessBreakdownSchema] = None
+    negotiation_intents: Optional[list]                   = None
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def _to_float(value) -> Optional[float]:
-    """Safely convert Decimal/int/str to float."""
     if value is None:
         return None
     try:
@@ -94,7 +89,6 @@ def _to_float(value) -> Optional[float]:
 
 
 def _sla_to_dict(sla) -> dict:
-    """Convert Prisma ContractSLA to the dict format NegotiationRules expects."""
     if not sla:
         return {}
 
@@ -103,19 +97,19 @@ def _sla_to_dict(sla) -> dict:
         return f"{f}%" if f is not None else None
 
     return {
-        "interest_rate":       pct_str(sla.aprPercent),
-        "lease_term_months":   sla.termMonths,
-        "monthly_payment":     _to_float(sla.monthlyPayment),
-        "down_payment":        _to_float(sla.downPayment),
-        "residual_value":      _to_float(sla.residualValue),
-        "mileage_allowance":   sla.mileageAllowanceYr,
-        "overage_charge":      _to_float(sla.mileageOverageFee),
+        "interest_rate":         pct_str(sla.aprPercent),
+        "lease_term_months":     sla.termMonths,
+        "monthly_payment":       _to_float(sla.monthlyPayment),
+        "down_payment":          _to_float(sla.downPayment),
+        "residual_value":        _to_float(sla.residualValue),
+        "mileage_allowance":     sla.mileageAllowanceYr,
+        "overage_charge":        _to_float(sla.mileageOverageFee),
         "early_termination_fee": _to_float(sla.earlyTerminationFee),
-        "late_fee":            sla.lateFeePolicy,
-        # fees_total used for fairness calculation directly
-        "fees_total":          _to_float(sla.feesTotal),
-        # dealer price — prefer capCost, fall back to msrp
-        "dealer_price":        _to_float(sla.capCost) or _to_float(sla.msrp),
+        "late_fee":              sla.lateFeePolicy,
+        "fees_total":            _to_float(sla.feesTotal),
+        "dealer_price":          _to_float(sla.capCost) or _to_float(sla.msrp),
+        # ✅ odometer reading from SLA — used to find comparable listings
+        "odometer":              _to_float(sla.odometerReading) if hasattr(sla, "odometerReading") else None,
     }
 
 
@@ -136,27 +130,12 @@ def _vehicle_to_dict(vehicle) -> Optional[dict]:
 @router.post(
     "/enrich/{contract_id}",
     response_model=EnrichContractResponse,
-    summary="Decode VIN → predict market price → calculate fairness → save",
+    summary="Decode VIN → fetch real market listings → calculate fairness → save",
 )
 async def enrich_contract(
     contract_id: str,
     db=Depends(get_db),
 ):
-    """
-    Full Week 7 pipeline for a contract.
-
-    Steps:
-    1. Load contract + SLA + vehicle from DB.
-    2. Decode VIN via MarketCheck (updates Vehicle fields if enriched).
-    3. Predict market price via MarketCheck.
-    4. Run NegotiationRules to generate intent-driven fairness sub-scores.
-    5. call calculate_fairness_score() with intent-informed inputs.
-    6. Persist market price + fairness score + intents to Contract / Vehicle.
-    7. Return structured EnrichContractResponse.
-
-    MarketCheck failures are non-fatal: contract data is returned with
-    market_data=None and a neutral fairness score.
-    """
     # ── 1. Load contract ────────────────────────────────────────────────────────
     contract = await db.contract.find_unique(
         where={"id": contract_id},
@@ -172,17 +151,16 @@ async def enrich_contract(
             detail="No SLA data found. Run /extract-sla/{contract_id} first.",
         )
 
-    sla_dict    = _sla_to_dict(contract.sla)
+    sla_dict     = _sla_to_dict(contract.sla)
     vehicle_dict = _vehicle_to_dict(contract.vehicle)
 
-    # ── 2. VIN decode (enrich Vehicle if we got new data) ───────────────────────
+    # ── 2. VIN decode ───────────────────────────────────────────────────────────
     vin = contract.vehicle.vin if contract.vehicle else None
     decoded_vehicle: Optional[dict] = None
 
     if vin:
         decoded_vehicle = await market_service.decode_vin(vin)
         if decoded_vehicle and contract.vehicleId:
-            # Merge decoded data into Vehicle row (only overwrite nulls)
             update_data = {}
             if decoded_vehicle.get("year")  and not contract.vehicle.year:
                 update_data["year"]  = decoded_vehicle["year"]
@@ -199,7 +177,6 @@ async def enrich_contract(
                     data=update_data,
                 )
 
-    # Merge decoded data into vehicle_dict for the response
     effective_vehicle = {
         "vin":   vin,
         "year":  (decoded_vehicle or {}).get("year")  or (vehicle_dict or {}).get("year"),
@@ -208,29 +185,49 @@ async def enrich_contract(
         "trim":  (decoded_vehicle or {}).get("trim")  or (vehicle_dict or {}).get("trim"),
     }
 
-    # ── 3. Predict market price ─────────────────────────────────────────────────
+    # ── 3. Fetch REAL market average from active listings ───────────────────────
+    #
+    # ✅ Use contract odometer as the miles reference so MarketCheck returns
+    #    comparable listings (same mileage band). Fallback to 50k if unknown.
+    #
+    contract_miles = int(sla_dict.get("odometer") or 50_000)
+
     price_data: Optional[dict] = None
 
     if effective_vehicle.get("make") and effective_vehicle.get("model"):
-        price_data = await market_service.predict_price(
+        logger.info(
+            "🚗 [enrich_contract] Fetching market average for %s %s %s | miles: %s",
+            effective_vehicle.get("year"),
+            effective_vehicle.get("make"),
+            effective_vehicle.get("model"),
+            contract_miles,
+        )
+        price_data = await market_service.get_market_average(   # ✅ real listings
             make=effective_vehicle["make"],
             model=effective_vehicle["model"],
-            year=effective_vehicle["year"],
+            year=effective_vehicle.get("year"),
             trim=effective_vehicle.get("trim"),
+            miles=contract_miles,
         )
 
     predicted_price: Optional[float] = price_data["predicted_price"] if price_data else None
     price_low:       Optional[float] = price_data["price_range"]["low"]  if price_data else None
     price_high:      Optional[float] = price_data["price_range"]["high"] if price_data else None
 
-    # ── 4. NegotiationRules — generate intents (intent-driven fairness) ──────────
+    logger.info(
+        "💰 [enrich_contract] Market result → avg: %s | low: %s | high: %s | listings: %s",
+        predicted_price, price_low, price_high,
+        price_data.get("listings_sampled") if price_data else 0,
+    )
+
+    # ── 4. NegotiationRules ─────────────────────────────────────────────────────
     analysis = NegotiationRules.analyze_contract(
         sla_data=sla_dict,
         vehicle_data=effective_vehicle,
         user_income=None,
     )
 
-    # ── 5. calculate_fairness_score — uses intent-aligned thresholds ─────────────
+    # ── 5. Fairness score ───────────────────────────────────────────────────────
     dealer_price = sla_dict.get("dealer_price")
     apr          = _to_float(contract.sla.aprPercent)
     fees         = sla_dict.get("fees_total")
@@ -238,54 +235,45 @@ async def enrich_contract(
 
     fairness_breakdown = calculate_fairness_score(
         dealer_price=dealer_price,
-        market_price=predicted_price,   # None → neutral 50 price sub-score
+        market_price=predicted_price,
         apr=apr,
         fees=fees,
         term=term,
     )
 
-    # Use the intent-engine's own fairness_score as the canonical value
-    # (it accounts for ALL contract fields, not just price/apr/fees/term).
-    # We blend: 60 % intent score + 40 % weighted breakdown.
-    intent_score   = analysis.get("fairness_score", 50.0)
+    intent_score    = analysis.get("fairness_score", 50.0)
     breakdown_score = fairness_breakdown["final_score"]
     blended_score   = round(intent_score * 0.60 + breakdown_score * 0.40, 2)
-
-    # Also propagate the breakdown's final with the blended value
     fairness_breakdown["final_score"] = blended_score
 
-    # ── 6. Persist to DB ────────────────────────────────────────────────────────
+    # ── 6. Persist ──────────────────────────────────────────────────────────────
     contract_update: dict = {
         "fairnessScore":      Decimal(str(blended_score)),
         "redFlagLevel":       analysis["rating"],
         "negotiationIntents": json.dumps(analysis["negotiation_intents"]),
     }
 
-    # Store market price in Contract.notes as JSON blob until schema migration
-    # (see schema_additions.prisma for the proper migration — add those fields
-    # to ContractSLA and re-run `prisma db push`).
-    # Once migrated, replace this with direct field writes.
-    market_blob = {
-        "market_price":     predicted_price,
-        "price_range_low":  price_low,
-        "price_range_high": price_high,
-    }
-    # Merge into existing notes safely
     existing_notes = contract.notes or ""
-    contract_update["notes"] = existing_notes  # preserve existing notes
+    contract_update["notes"] = existing_notes
 
     await db.contract.update(
         where={"id": contract_id},
         data=contract_update,
     )
 
-    # Store market data in ContractSLA.otherTerms (JsonB) as a structured side-car
-    # until the dedicated Prisma columns are added via migration.
-    # NOTE: Prisma-Python requires JsonB fields to be passed as a JSON string.
-    existing_other = {}
+    # Store market blob in SLA.otherTerms
+    market_blob = {
+        "market_price":      predicted_price,
+        "price_range_low":   price_low,
+        "price_range_high":  price_high,
+        "listings_sampled":  price_data.get("listings_sampled") if price_data else None,  # ✅
+        "listings_found":    price_data.get("listings_found")   if price_data else None,  # ✅
+        "source":            price_data.get("source")           if price_data else None,  # ✅
+    }
+
+    existing_other: dict = {}
     if contract.sla.otherTerms:
         try:
-            # Prisma returns JsonB as already-parsed dict; handle both cases
             raw = contract.sla.otherTerms
             existing_other = raw if isinstance(raw, dict) else json.loads(raw)
         except Exception:
@@ -295,10 +283,10 @@ async def enrich_contract(
 
     await db.contractsla.update(
         where={"id": contract.sla.id},
-        data={"otherTerms": json.dumps(existing_other)},  # must be string for Prisma-Python
+        data={"otherTerms": json.dumps(existing_other)},
     )
 
-    # ── 7. Build response ───────────────────────────────────────────────────────
+    # ── 7. Response ─────────────────────────────────────────────────────────────
     return EnrichContractResponse(
         contract_data=ContractDataSchema(
             id=contract_id,
@@ -310,6 +298,9 @@ async def enrich_contract(
         market_data=MarketDataSchema(
             predicted_price=predicted_price,
             price_range=PriceRangeSchema(low=price_low, high=price_high) if price_data else None,
+            listings_sampled=price_data.get("listings_sampled") if price_data else None,
+            listings_found=price_data.get("listings_found")     if price_data else None,
+            source=price_data.get("source")                     if price_data else None,
         ) if price_data else None,
         fairness_breakdown=FairnessBreakdownSchema(**fairness_breakdown),
         negotiation_intents=analysis["negotiation_intents"],
@@ -327,10 +318,6 @@ async def get_market_result(
     contract_id: str,
     db=Depends(get_db),
 ):
-    """
-    Return already-computed market + fairness data without re-calling MarketCheck.
-    Useful for GET /contracts/{id} enriched response.
-    """
     contract = await db.contract.find_unique(
         where={"id": contract_id},
         include={"sla": True, "vehicle": True},
@@ -339,22 +326,22 @@ async def get_market_result(
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
 
-    # Pull market blob from SLA.otherTerms side-car
     market_blob: dict = {}
     if contract.sla and contract.sla.otherTerms:
         try:
-            # Prisma-Python may return JsonB as dict or string depending on version
             raw = contract.sla.otherTerms
             parsed = raw if isinstance(raw, dict) else json.loads(raw)
             market_blob = parsed.get("__market__", {})
         except Exception:
             market_blob = {}
 
-    predicted_price = market_blob.get("market_price")
-    price_low       = market_blob.get("price_range_low")
-    price_high      = market_blob.get("price_range_high")
+    predicted_price  = market_blob.get("market_price")
+    price_low        = market_blob.get("price_range_low")
+    price_high       = market_blob.get("price_range_high")
+    listings_sampled = market_blob.get("listings_sampled")   # ✅
+    listings_found   = market_blob.get("listings_found")     # ✅
+    source           = market_blob.get("source")             # ✅
 
-    # Pull stored intents
     intents = None
     if contract.negotiationIntents:
         try:
@@ -363,7 +350,6 @@ async def get_market_result(
         except Exception:
             intents = None
 
-    # Rebuild fairness breakdown from stored score (sub-scores not persisted — recalculate)
     sla_dict = _sla_to_dict(contract.sla) if contract.sla else {}
     fairness_breakdown = calculate_fairness_score(
         dealer_price=sla_dict.get("dealer_price"),
@@ -372,7 +358,6 @@ async def get_market_result(
         fees=sla_dict.get("fees_total"),
         term=contract.sla.termMonths if contract.sla else None,
     )
-    # Overwrite final_score with the stored blended value if present
     if contract.fairnessScore:
         fairness_breakdown["final_score"] = float(contract.fairnessScore)
 
@@ -388,8 +373,10 @@ async def get_market_result(
         vehicle_data=VehicleDataSchema(**vehicle_dict) if vehicle_dict else None,
         market_data=MarketDataSchema(
             predicted_price=predicted_price,
-            price_range=PriceRangeSchema(low=price_low, high=price_high)
-            if predicted_price else None,
+            price_range=PriceRangeSchema(low=price_low, high=price_high) if predicted_price else None,
+            listings_sampled=listings_sampled,
+            listings_found=listings_found,
+            source=source,
         ) if predicted_price else None,
         fairness_breakdown=FairnessBreakdownSchema(**fairness_breakdown),
         negotiation_intents=intents,
