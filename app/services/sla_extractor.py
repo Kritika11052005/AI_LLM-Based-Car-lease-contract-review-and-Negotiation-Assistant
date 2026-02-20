@@ -2,6 +2,28 @@ import json
 from app.services.llm_client import call_llm
 
 
+# =========================================================
+# DEFAULT SAFE SLA STRUCTURE
+# =========================================================
+
+def default_sla():
+    return {
+        "apr": None,
+        "lease_term_months": None,
+        "monthly_payment": None,
+        "down_payment": None,
+        "residual_value": None,
+        "mileage_allowance": None,
+        "early_termination_clause": None,
+        "purchase_option": None,
+        "late_fees": None
+    }
+
+
+# =========================================================
+# SLA EXTRACTION
+# =========================================================
+
 def extract_sla(text: str):
 
     PROMPT = f"""
@@ -32,7 +54,6 @@ Number rules:
 - "2.9%" → 2.9
 - "₹10,500" → 10500
 - If not present → null
-- Convert months to numbers, e.g. "36 months" → 36
 
 Return STRICT JSON with EXACT keys:
 
@@ -52,12 +73,49 @@ Contract text:
 \"\"\"{text}\"\"\"
 """
 
-    raw = call_llm(PROMPT)
-
     try:
-        return json.loads(raw)
-    except Exception:
-        # fallback if model adds noise
+
+        raw = call_llm(PROMPT)
+
+        if not raw:
+            print("⚠️ SLA extraction returned empty response")
+            return default_sla()
+
+        raw = raw.strip()
+
+        # -----------------------------
+        # Remove markdown if present
+        # -----------------------------
+        if raw.startswith("```"):
+            raw = raw.replace("```json", "")
+            raw = raw.replace("```", "")
+            raw = raw.strip()
+
+        # -----------------------------
+        # Try direct JSON parse
+        # -----------------------------
+        try:
+            return json.loads(raw)
+
+        except Exception:
+            pass
+
+        # -----------------------------
+        # Extract JSON substring
+        # -----------------------------
         start = raw.find("{")
         end = raw.rfind("}") + 1
-        return json.loads(raw[start:end])
+
+        if start == -1 or end == -1:
+            print("⚠️ No JSON object found in LLM response")
+            print("Raw response:", raw)
+            return default_sla()
+
+        json_str = raw[start:end]
+
+        return json.loads(json_str)
+
+    except Exception as e:
+
+        print("❌ SLA extraction failed:", str(e))
+        return default_sla()

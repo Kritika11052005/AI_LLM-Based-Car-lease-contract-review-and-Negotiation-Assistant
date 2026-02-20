@@ -5,179 +5,291 @@ import plotly.graph_objects as go
 from frontend.api import get_contract
 
 
-# ---------------- SAFE NUMBER ----------------
+# =========================================================
+# UTILITIES
+# =========================================================
 
-def safe_number(value, default=None):
+def safe_number(value):
     try:
         if value is None:
-            return default
+            return None
         return float(value)
     except:
-        return default
+        return None
 
 
-# ---------------- DASHBOARD ----------------
+def format_currency(value):
+    if value is None:
+        return "N/A"
+    return f"₹{value:,.0f}"
 
-def render_dashboard(contract_id: int):
 
-    contract = get_contract(contract_id)
+def format_percent(value):
+    if value is None:
+        return "N/A"
+    return f"{value:.2f}%"
 
-    if not contract:
-        st.error("Failed to load contract data")
-        return
 
-    # =========================
-    # SAFE EXTRACTION
-    # =========================
+def get_score_color(score):
+    if score is None:
+        return "#64748b"
+    if score >= 80:
+        return "#16a34a"
+    elif score >= 60:
+        return "#f59e0b"
+    else:
+        return "#dc2626"
 
-    sla = contract.get("sla") or {}
-    market_price = contract.get("market_price") or {}
-    fairness = contract.get("fairness") or {}
 
-    contract_price = safe_number(
-        sla.get("purchase_option")
-        or sla.get("residual_value")
-        or sla.get("monthly_payment")
-    )
+def get_score_label(score):
+    if score is None:
+        return "Unknown"
+    if score >= 85:
+        return "Excellent Deal"
+    elif score >= 70:
+        return "Good Deal"
+    elif score >= 50:
+        return "Average Deal"
+    else:
+        return "Poor Deal"
 
-    market_avg = safe_number(
-        market_price.get("fair_market_value")
-    )
 
-    price_low = safe_number(
-        market_price.get("price_range_low")
-    )
+# =========================================================
+# EXECUTIVE HEADER
+# =========================================================
 
-    price_high = safe_number(
-        market_price.get("price_range_high")
-    )
+def render_vehicle_header(contract):
 
-    fairness_score = fairness.get("fairness_score")
-    rating = fairness.get("rating")
-    explanation = fairness.get("explanation")
-    negotiation_power = fairness.get("negotiation_power")
-    action = fairness.get("recommended_action")
+    vehicle = contract.get("vehicle") or {}
+    vin = contract.get("vin")
 
-    # Detect fallback fairness (old incorrect data)
-    is_fallback = (
-        fairness_score == 50 and
-        rating in ("Unknown", None) and
-        negotiation_power in ("Unknown", None)
-    )
+    make = vehicle.get("make")
+    model = vehicle.get("model")
+    year = vehicle.get("year")
 
-    if is_fallback:
-        st.warning("Fairness score appears to be fallback. Refresh contract or re-analyze.")
+    st.markdown("## 🚘 Vehicle Overview")
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.markdown(f"### {year or ''} {make or ''} {model or ''}")
+        if vin:
+            st.caption(f"VIN: {vin}")
+
+    with col2:
+        st.markdown(
+            """
+            <div class="status-pill success-pill">
+                Analysis Complete
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+# =========================================================
+# EXECUTIVE SUMMARY CARD
+# =========================================================
+
+def render_executive_summary(score, dealer_price, market_avg):
+
+    st.markdown("## 🧠 Executive Summary")
+
+    label = get_score_label(score)
+    color = get_score_color(score)
 
     diff = None
-    if contract_price is not None and market_avg is not None:
-        diff = contract_price - market_avg
+    percent = None
 
-    # =========================
-    # HEADER METRICS
-    # =========================
+    if dealer_price and market_avg:
+        diff = dealer_price - market_avg
+        percent = (diff / market_avg) * 100
 
-    st.markdown("## 📊 Contract Overview")
+    st.markdown(
+        f"""
+        <div class="summary-card">
+            <div class="summary-score" style="color:{color}">
+                {score if score else 'N/A'}/100
+            </div>
+            <div class="summary-text">
+                <strong>{label}</strong><br>
+                {'Overpriced by ' + str(round(percent,1)) + '%' if diff and diff > 0 else 'Underpriced compared to market'}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# KPI SECTION
+# =========================================================
+
+def render_kpis(dealer_price, market_avg, score):
+
+    st.markdown("## 📊 Financial Metrics")
+
+    diff = None
+    percent = None
+
+    if dealer_price and market_avg:
+        diff = dealer_price - market_avg
+        percent = (diff / market_avg) * 100
 
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric(
-        "Contract Price",
-        f"₹{contract_price:,.0f}" if contract_price else "N/A"
-    )
+    col1.metric("Dealer Price", format_currency(dealer_price))
+    col2.metric("Market Average", format_currency(market_avg))
 
-    col2.metric(
-        "Market Average",
-        f"₹{market_avg:,.0f}" if market_avg else "N/A"
-    )
+    if diff is not None:
+        col3.metric("Difference", format_currency(diff), f"{percent:.1f}%")
+    else:
+        col3.metric("Difference", "N/A")
 
-    col3.metric(
-        "Price Difference",
-        f"₹{diff:,.0f}" if diff is not None else "N/A"
-    )
+    col4.metric("Fairness Score", f"{score}/100" if score else "N/A")
 
-    col4.metric(
-        "Fairness Score",
-        f"{fairness_score}/100" if fairness_score is not None else "N/A"
-    )
 
-    st.markdown("---")
+# =========================================================
+# PRICE POSITION METER
+# =========================================================
 
-    # =========================
-    # MARKET PRICE CHART
-    # =========================
+def render_price_position(dealer_price, market_avg):
 
-    st.subheader("📈 Market Price Comparison")
+    if dealer_price is None or market_avg is None:
+        return
 
-    chart_data = {
-        "Category": [
-            "Contract Price",
-            "Market Average",
-            "Low Range",
-            "High Range"
-        ],
-        "Price": [
-            contract_price or 0,
-            market_avg or 0,
-            price_low or 0,
-            price_high or 0
-        ]
-    }
+    percent = (dealer_price / market_avg) * 100
 
-    df = pd.DataFrame(chart_data)
+    fig = go.Figure(go.Indicator(
+        mode="gauge",
+        value=percent,
+        gauge={
+            'axis': {'range': [50, 150]},
+            'bar': {'color': "#3b82f6"},
+        }
+    ))
 
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Bar(
-            x=df["Category"],
-            y=df["Price"],
-            text=[
-                f"₹{v:,.0f}" if v else "N/A"
-                for v in df["Price"]
-            ],
-            textposition="outside"
-        )
-    )
-
-    fig.update_layout(
-        height=400,
-        margin=dict(l=20, r=20, t=40, b=20)
-    )
-
+    fig.update_layout(height=250)
     st.plotly_chart(fig, use_container_width=True)
 
-    # =========================
-    # FAIRNESS ANALYSIS SECTION
-    # =========================
 
-    st.markdown("---")
+# =========================================================
+# FAIRNESS BREAKDOWN
+# =========================================================
 
-    st.subheader("🧠 Contract Fairness Analysis")
+def render_score_breakdown(fairness):
+
+    breakdown = fairness.get("score_breakdown")
+    if not breakdown:
+        return
+
+    st.markdown("## 📈 Score Breakdown")
+
+    df = pd.DataFrame({
+        "Component": ["Price", "APR", "Fees", "Term"],
+        "Score": [
+            breakdown.get("price_score"),
+            breakdown.get("apr_score"),
+            breakdown.get("fees_score"),
+            breakdown.get("term_score")
+        ]
+    })
+
+    fig = go.Figure(go.Bar(
+        x=df["Score"],
+        y=df["Component"],
+        orientation="h",
+        marker_color="#3b82f6",
+        text=[f"{s}/100" for s in df["Score"]],
+        textposition="inside"
+    ))
+
+    fig.update_layout(height=300, xaxis=dict(range=[0, 100]))
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# =========================================================
+# NEGOTIATION PANEL
+# =========================================================
+
+def render_negotiation_panel(fairness):
+
+    st.markdown("## 🤝 Negotiation Strategy")
+
+    action = fairness.get("recommended_action")
+    power = fairness.get("negotiation_power")
 
     col1, col2 = st.columns(2)
 
-    col1.metric(
-        "Fairness Score",
-        f"{fairness_score}/100" if fairness_score is not None else "N/A"
-    )
+    col1.metric("Negotiation Power", power)
+    col2.metric("Primary Focus", action)
 
-    col2.metric(
-        "Rating",
-        rating if rating else "Unknown"
-    )
 
-    if explanation:
-        st.info(explanation)
+# =========================================================
+# SLA SECTION
+# =========================================================
 
-    if negotiation_power:
-        st.warning(f"Negotiation Power: {negotiation_power}")
+def render_sla_section(sla):
 
-    if action:
-        st.success(f"Recommended Action: {action}")
+    st.markdown("## 📄 Lease Terms")
 
-    # =========================
-    # DEBUG PANEL
-    # =========================
+    col1, col2, col3, col4 = st.columns(4)
 
-    with st.expander("🔍 Debug Data"):
+    col1.metric("APR", format_percent(safe_number(sla.get("apr"))))
+    col2.metric("Lease Term", f"{sla.get('lease_term_months')} months" if sla.get("lease_term_months") else "N/A")
+    col3.metric("Monthly Payment", format_currency(safe_number(sla.get("monthly_payment"))))
+    col4.metric("Down Payment", format_currency(safe_number(sla.get("down_payment"))))
+
+    col5, col6, col7, col8 = st.columns(4)
+
+    col5.metric("Residual Value", format_currency(safe_number(sla.get("residual_value"))))
+    col6.metric("Purchase Option", format_currency(safe_number(sla.get("purchase_option"))))
+    col7.metric("Late Fees", format_currency(safe_number(sla.get("late_fees"))))
+    col8.metric("Mileage", f"{sla.get('mileage_allowance'):,} km" if sla.get("mileage_allowance") else "N/A")
+
+    if sla.get("early_termination_clause"):
+        st.markdown("### Early Termination Clause")
+        st.info(sla.get("early_termination_clause"))
+
+
+# =========================================================
+# MAIN DASHBOARD
+# =========================================================
+
+def render_dashboard(contract_id):
+
+    contract = get_contract(contract_id)
+    if not contract:
+        st.error("Failed to load contract")
+        return
+
+    sla = contract.get("sla") or {}
+    market = contract.get("market_price") or {}
+    fairness = contract.get("fairness") or {}
+
+    dealer_price = safe_number(contract.get("dealer_price"))
+    market_avg = safe_number(market.get("fair_market_value"))
+    score = safe_number(fairness.get("fairness_score"))
+
+    render_vehicle_header(contract)
+    st.divider()
+
+    render_executive_summary(score, dealer_price, market_avg)
+    st.divider()
+
+    render_kpis(dealer_price, market_avg, score)
+    st.divider()
+
+    render_price_position(dealer_price, market_avg)
+    st.divider()
+
+    render_score_breakdown(fairness)
+    st.divider()
+
+    render_negotiation_panel(fairness)
+    st.divider()
+
+    render_sla_section(sla)
+
+    with st.expander("Debug Data"):
         st.json(contract)

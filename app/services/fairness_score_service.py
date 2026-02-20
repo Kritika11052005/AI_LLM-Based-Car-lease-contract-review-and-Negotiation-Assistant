@@ -1,64 +1,104 @@
-import json
-from app.services.llm_client import call_llm
+def clamp(score):
+    if score is None:
+        return 0
+    return max(0, min(100, round(score, 1)))
 
 
-def generate_fairness_score_llm(sla, market_price, vehicle):
+def calculate_price_score(contract_price, market_price):
 
-    prompt = f"""
-You are an expert car lease financial analyst.
+    if not contract_price or not market_price:
+        return 50
 
-Evaluate the fairness of this lease contract.
+    percent_diff = ((contract_price - market_price) / market_price) * 100
 
-Vehicle:
-{json.dumps(vehicle, indent=2)}
+    if percent_diff > 0:
+        score = 100 - (percent_diff * 3)
+    else:
+        score = 100 + (abs(percent_diff) * 0.5)
 
-Market Price Data:
-{json.dumps(market_price, indent=2)}
+    return clamp(score)
 
-Lease Contract Terms:
-{json.dumps(sla, indent=2)}
 
-Evaluate fairness based on:
+def calculate_apr_score(apr):
+    if apr is None:
+        return 70
 
-• APR vs market norms
-• Monthly payment vs fair market value
-• Down payment reasonableness
-• Purchase option fairness
-• Residual value fairness
+    score = 100
 
-Return ONLY valid JSON in this format:
+    if apr > 10:
+        score -= (apr - 10) * 15
+    elif apr > 8:
+        score -= (apr - 8) * 10
+    elif apr > 6:
+        score -= (apr - 6) * 5
 
-{{
-  "fairness_score": number_between_0_and_100,
-  "rating": "Excellent | Good | Average | Poor",
-  "explanation": "clear explanation",
-  "negotiation_power": "Strong | Moderate | Weak",
-  "recommended_action": "what user should do"
-}}
-"""
+    return clamp(score)
 
-    try:
 
-        response = call_llm(prompt)
+def calculate_fees_score(fees):
+    if fees is None:
+        return 90
 
-        # Try parse JSON
-        start = response.find("{")
-        end = response.rfind("}") + 1
+    if fees > 2000:
+        return 70
+    elif fees > 1000:
+        return 80
+    else:
+        return 90
 
-        json_str = response[start:end]
 
-        data = json.loads(json_str)
+def calculate_term_score(term):
+    if term is None:
+        return 70
 
-        return data
+    if term < 12:
+        return 70
+    elif term > 72:
+        return 75
+    elif term >= 60:
+        return 90
+    else:
+        return 100
 
-    except Exception as e:
 
-        print("LLM fairness parse error:", e)
+def calculate_fairness_score(sla, market_price, vehicle=None, dealer_price=None):
 
-        return {
-            "fairness_score": 50,
-            "rating": "Unknown",
-            "explanation": "LLM parsing failed",
-            "negotiation_power": "Unknown",
-            "recommended_action": "Review manually"
+    contract_price = (
+        dealer_price
+        or sla.get("purchase_option")
+        or sla.get("residual_value")
+        or sla.get("monthly_payment")
+    )
+
+    market_avg = market_price.get("fair_market_value")
+
+    price_score = calculate_price_score(contract_price, market_avg)
+    apr_score = calculate_apr_score(sla.get("apr"))
+    fees_score = calculate_fees_score(sla.get("late_fees"))
+    term_score = calculate_term_score(sla.get("lease_term_months"))
+
+    final_score = (
+        price_score * 0.40 +
+        apr_score * 0.25 +
+        fees_score * 0.15 +
+        term_score * 0.20
+    )
+
+    final_score = clamp(final_score)
+
+    return {
+        "fairness_score": final_score,
+        "rating": "Excellent Deal" if final_score >= 85
+        else "Good Deal" if final_score >= 70
+        else "Average Deal" if final_score >= 50
+        else "Poor Deal",
+        "negotiation_power": "Low" if final_score >= 85
+        else "Moderate" if final_score >= 70
+        else "Strong",
+        "score_breakdown": {
+            "price_score": price_score,
+            "apr_score": apr_score,
+            "fees_score": fees_score,
+            "term_score": term_score
         }
+    }

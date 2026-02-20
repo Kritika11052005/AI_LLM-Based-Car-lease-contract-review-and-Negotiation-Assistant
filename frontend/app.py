@@ -76,13 +76,10 @@ with st.sidebar:
 
 # ---------------- HEADER ----------------
 
-st.markdown("### Contract Intelligence Platform")
+st.markdown("## 🚗 ContractClarity")
+st.caption("Enterprise Lease Intelligence Platform")
 
-st.markdown(
-    "AI-powered contract analysis, pricing intelligence, and negotiation"
-)
-
-st.markdown("---")
+st.divider()
 
 
 # ---------------- ROUTING ----------------
