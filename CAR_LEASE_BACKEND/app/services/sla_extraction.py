@@ -46,6 +46,12 @@ Definitions:
 - early_termination_clause: Rules, fees, or penalties for ending the lease early.
 - purchase_option: Whether and how the lessee can purchase the vehicle at lease end.
 - late_fees: Penalties for late payments.
+- cap_cost: Capitalized cost - the negotiated price of the vehicle in the lease (may be called "Gross Cap Cost" or "Adjusted Cap Cost").
+- msrp: Manufacturer's Suggested Retail Price or sticker price of the vehicle.
+- cap_cost_reduction: Total of down payment, trade-in value, and any rebates applied to reduce the cap cost.
+- fees_total: Total fees including acquisition fee, documentation fee, registration, taxes, etc.
+- money_factor: The lease interest rate expressed as a decimal (APR divided by 2400). May appear as a small decimal like 0.00125.
+- purchase_option_price: The price to buy the vehicle at the end of the lease (often equals residual value).
 
 If a field is not explicitly present, return null.
 

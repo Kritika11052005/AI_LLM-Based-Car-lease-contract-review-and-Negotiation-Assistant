@@ -19,6 +19,14 @@ class SLAData(BaseModel):
     purchase_option: Optional[str] = None
     late_fees: Optional[str] = None
     
+    # New financial fields for dealer price calculation
+    cap_cost: Optional[str] = None  # Capitalized cost (vehicle price in lease)
+    msrp: Optional[str] = None  # Manufacturer's Suggested Retail Price
+    cap_cost_reduction: Optional[str] = None  # Down payment + trade-in + rebates
+    fees_total: Optional[str] = None  # Total fees (acquisition, doc, etc.)
+    money_factor: Optional[str] = None  # Lease interest rate (APR/2400)
+    purchase_option_price: Optional[str] = None  # End-of-lease buyout price
+    
     @field_validator('*', mode='before')
     @classmethod
     def normalize_values(cls, value):
