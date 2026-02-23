@@ -1,5 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Numeric, Text, ForeignKey, DateTime, func, Boolean, Date
+import datetime
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, JSON, DateTime, Text, Numeric
+from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -13,7 +15,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     phone = Column(String(40))
     full_name = Column(String(200))
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     contracts = relationship("Contract", back_populates="user")
     negotiation_threads = relationship("NegotiationThread", back_populates="user")
@@ -24,12 +26,12 @@ class User(Base):
 class Vehicle(Base):
     __tablename__ = "vehicles"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    vin = Column(String(17), nullable=False, unique=True)
+    vin = Column(String(17), nullable=True, unique=True) # Changed to nullable=True as OCR might fail initially
     year = Column(Integer)
     make = Column(String(128))
     model = Column(String(128))
     body_class = Column(String(128))
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     contracts = relationship("Contract", back_populates="vehicle")
 
@@ -44,33 +46,37 @@ class Contract(Base):
     
     contract_type = Column(String(50), default="lease") 
     doc_status = Column(String(50)) 
+    
+    # ✅ ADDED: Raw Text Storage
     raw_text = Column(Text, nullable=True) 
     
     vin = Column(String(17), nullable=True)
     vehicle_make = Column(String(128), nullable=True)
     vehicle_model = Column(String(128), nullable=True)
     vehicle_year = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # ✅ ADDED: Market Value
+    market_value = Column(Float, nullable=True)
 
     user = relationship("User", back_populates="contracts")
     vehicle = relationship("Vehicle", back_populates="contracts")
-    sla_analysis = relationship("ContractSLA", back_populates="contract", uselist=False)
+    sla = relationship("ContractSLA", back_populates="contract", uselist=False) # Renamed back_populates to match SLA
     negotiation_threads = relationship("NegotiationThread", back_populates="contract")
-    # Added this back to fix the ImportError in services
     extractions = relationship("Extraction", back_populates="contract")
 
 # =========================
-# EXTRACTIONS (Added to fix ImportError)
+# EXTRACTIONS
 # =========================
 class Extraction(Base):
     __tablename__ = "extractions"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     contract_id = Column(UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False)
     model_name = Column(String(120))
-    status = Column(String(50)) # e.g., 'pending', 'completed', 'failed'
+    status = Column(String(50)) 
     raw_output = Column(JSONB)
     error_message = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     contract = relationship("Contract", back_populates="extractions")
 
@@ -82,33 +88,38 @@ class ContractSLA(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     contract_id = Column(UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False)
     
-    # Financials
-    apr_percent = Column(Numeric(6, 3))
-    money_factor = Column(Numeric(10, 6))
+    # Financials (Converted Numeric -> Float for consistency with main.py math)
+    apr_percent = Column(Float)
+    money_factor = Column(Float)
     term_months = Column(Integer)
-    monthly_payment = Column(Text)  # Matches SQL ALTER to TEXT
-    down_payment = Column(Numeric(12, 2))
-    residual_value = Column(Numeric(12, 2))
+    monthly_payment = Column(String) # Keep String to handle currency symbols if needed
+    down_payment = Column(Float)
+    residual_value = Column(Float)
     
-    # These match the SQL TEXT types for flexible policy descriptions
+    # Descriptions
     early_termination_fee = Column(Text) 
     purchase_option_price = Column(Text)
     
-    # NEW COLUMNS ADDED VIA MIGRATION
-    contract_data = Column(JSONB)        # The single combined JSON for Swagger
-    negotiation_report = Column(JSONB)   # Hidden flags for the Chat Assistant
-    fairness_score = Column(Integer)     # Numeric score 0-100
+    # Analysis Data
+    contract_data = Column(JSONB)        
+    negotiation_report = Column(JSONB)   
+    fairness_score = Column(Integer)    
+    llm_summary = Column(Text) 
 
-    # Remaining existing fields
+    # Other Terms
     mileage_allowance_yr = Column(Integer)
-    mileage_overage_fee = Column(Numeric(8, 4))
-    disposition_fee = Column(Numeric(12, 2)) 
+    mileage_overage_fee = Column(Float)
+    disposition_fee = Column(Float) 
     maintenance_resp = Column(Text)
     warranty_summary = Column(Text)
     late_fee_policy = Column(Text)
     other_terms = Column(JSONB)
     
-    contract = relationship("Contract", back_populates="sla_analysis")
+    # ✅ ADDED: New Financials
+    dealer_price = Column(Float, nullable=True)
+    buyout_price = Column(Float, nullable=True)
+    
+    contract = relationship("Contract", back_populates="sla")
 
 # =========================
 # NEGOTIATION LOGIC
@@ -120,7 +131,7 @@ class NegotiationThread(Base):
     contract_id = Column(UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False)
     channel = Column(String(50), default="chat")
     subject = Column(String(255))
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="negotiation_threads")
     contract = relationship("Contract", back_populates="negotiation_threads")
@@ -133,7 +144,15 @@ class NegotiationMessage(Base):
     sender_role = Column(String(40)) 
     body = Column(Text)
     suggested_text = Column(Text)
-    # Change this line:
     sent_at = Column(DateTime(timezone=True), server_default=func.now(), index=True) 
 
     thread = relationship("NegotiationThread", back_populates="messages")
+
+class VehicleRecall(Base):
+    __tablename__ = "vehicle_recalls"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False)
+    component = Column(String, nullable=True)
+    summary = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

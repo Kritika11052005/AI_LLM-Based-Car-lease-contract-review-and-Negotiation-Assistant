@@ -1,19 +1,18 @@
 import os
-from langchain_groq import ChatGroq
-from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-load_dotenv(override=True)
+# --- CONFIGURATION ---
+# UPDATED: Using Gemini 2.5 Flash (Current Stable Model in 2026)
+# Context: 1M+ Tokens | Rate Limits: High
 
-# Llama 3.3 70B is great for complex extraction tasks
-llm_extraction = ChatGroq(
-    model_name="llama-3.3-70b-versatile",
-    groq_api_key=os.getenv("GROQ_API_KEY"),
+llm_extraction = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",  # <--- UPDATE TO 2.5
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
     temperature=0
 )
 
-# Llama 3.1 8B is perfect for fast, conversational chat
-chat_llm = ChatGroq(
-    model_name="llama-3.1-8b-instant",
-    groq_api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.5
+chat_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",  # <--- UPDATE TO 2.5
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    temperature=0.7
 )

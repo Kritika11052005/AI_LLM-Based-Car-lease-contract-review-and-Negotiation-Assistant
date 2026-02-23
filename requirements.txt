@@ -10,3 +10,4 @@ pillow
 langchain
 langchain-google-genai
 pydantic
+plotly
