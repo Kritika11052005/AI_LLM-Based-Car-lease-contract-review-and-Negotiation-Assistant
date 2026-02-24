@@ -1,7 +1,7 @@
 # app/services/dealer_price_service.py
 
 import json
-from app.services.llm_client import call_llm
+from app.services.llm_client import call_extraction_llm
 
 
 def extract_dealer_price(raw_text: str):
@@ -39,7 +39,7 @@ Contract text:
 """
 
     try:
-        response = call_llm(prompt)
+        response = call_extraction_llm(prompt)
 
         if not response:
             return None

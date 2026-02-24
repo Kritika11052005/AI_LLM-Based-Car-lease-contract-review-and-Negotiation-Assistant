@@ -1,5 +1,9 @@
+/* ===================================================
+   GLOBAL LAYOUT
+=================================================== */
+
 .stApp {
-    background-color: #f4f6f9;
+    background-color: #eef2f7;
 }
 
 .block-container {
@@ -7,45 +11,415 @@
     padding-bottom: 3rem;
 }
 
-div[data-testid="metric-container"] {
-    background: white;
-    border-radius: 14px;
-    padding: 18px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+
+/* ===================================================
+   SIDEBAR (FINAL WORKING VERSION)
+=================================================== */
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+    color: #e2e8f0;
+    padding-top: 20px;
+    border-right: none;
 }
 
-.summary-card {
-    background: white;
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+/* Remove focus glow */
+section[data-testid="stSidebar"] *,
+section[data-testid="stSidebar"] *:focus,
+section[data-testid="stSidebar"] *:active,
+section[data-testid="stSidebar"] *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Hide radio circle */
+section[data-testid="stSidebar"] input[type="radio"] {
+    display: none !important;
+}
+
+/* Nav container */
+section[data-testid="stSidebar"] .stRadio > div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* Base nav item */
+section[data-testid="stSidebar"] .stRadio label {
+    padding: 10px 16px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Default text color */
+section[data-testid="stSidebar"] .stRadio label * {
+    color: #cbd5e1 !important;
+    opacity: 1 !important;
+}
+
+/* Hover */
+section[data-testid="stSidebar"] .stRadio label:hover {
+    background-color: rgba(255,255,255,0.06);
+    transform: translateX(4px);
+}
+
+/* ACTIVE STATE */
+section[data-testid="stSidebar"] .stRadio label:has(input:checked) {
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
+}
+
+/* Force active text fully white */
+section[data-testid="stSidebar"] .stRadio label:has(input:checked) * {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* Session Info Card */
+.sidebar-session {
+    background: rgba(255,255,255,0.05);
+    padding: 14px;
+    border-radius: 10px;
+    margin-top: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Reset button */
+section[data-testid="stSidebar"] .stButton > button {
+    width: 100%;
+    background-color: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 8px;
+    transition: all 0.2s ease;
+}
+
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+
+/* ===================================================
+   SECTION HEADERS
+=================================================== */
+
+.section-header {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 18px;
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 8px;
 }
 
-.summary-score {
-    font-size: 48px;
+
+/* ===================================================
+   WHITE CARDS (ENTERPRISE STYLE)
+=================================================== */
+
+.section-card {
+    background: white;
+    padding: 28px;
+    border-radius: 14px;
+    box-shadow: 0 8px 25px rgba(15,23,42,0.08);
+    margin-bottom: 25px;
+}
+
+
+/* ===================================================
+   KPI CARDS
+=================================================== */
+
+.kpi-card {
+    background: white;
+    padding: 18px;
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(15,23,42,0.06);
+    transition: all 0.25s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 35px rgba(15,23,42,0.12);
+}
+
+.kpi-label {
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-value {
+    font-size: 28px;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+
+/* ===================================================
+   STATUS CARDS
+=================================================== */
+
+.status-danger {
+    border-left: 5px solid #ef4444;
+    background: #fef2f2;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.status-success {
+    border-left: 5px solid #10b981;
+    background: #ecfdf5;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.status-warning {
+    border-left: 5px solid #f59e0b;
+    background: #fffbeb;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+
+/* ===================================================
+   SUCCESS / WARNING / ERROR OVERRIDES
+=================================================== */
+
+.stSuccess {
+    background-color: #ecfdf5 !important;
+    border-left: 5px solid #10b981 !important;
+}
+
+.stWarning {
+    background-color: #fffbeb !important;
+    border-left: 5px solid #f59e0b !important;
+}
+
+.stError {
+    background-color: #fef2f2 !important;
+    border-left: 5px solid #ef4444 !important;
+}
+
+
+/* ===================================================
+   SMOOTH PAGE ENTRANCE
+=================================================== */
+
+.fade-up {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fade-delay-1 { animation-delay: 0.1s; }
+.fade-delay-2 { animation-delay: 0.2s; }
+.fade-delay-3 { animation-delay: 0.3s; }
+.fade-delay-4 { animation-delay: 0.4s; }
+
+@keyframes fadeUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+/* ===================================================
+   ENTERPRISE UI COMPONENT SYSTEM
+=================================================== */
+
+/* Section Wrapper */
+.enterprise-card {
+    background: transparent;
+    padding: 20px 0;
+    margin-bottom: 32px;
+    border-bottom: 1px solid #e5e7eb;
+}
+/* Section Title */
+.enterprise-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Big Score Card */
+.score-card {
+    background: white;
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 10px 35px rgba(15,23,42,0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.score-value {
+    font-size: 64px;
     font-weight: 700;
 }
 
-.summary-text {
-    font-size: 16px;
-}
-
-.status-pill {
-    padding: 10px 16px;
-    border-radius: 20px;
+.score-badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
     font-weight: 600;
-    text-align: center;
+    display: inline-block;
 }
 
-.success-pill {
-    background-color: #dcfce7;
-    color: #166534;
+.badge-danger {
+    background: #fee2e2;
+    color: #dc2626;
 }
 
-h1, h2, h3 {
-    color: #111827;
+.badge-warning {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.badge-success {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+/* Two Column Metric Layout */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+/* Label + Value Rows (Score Breakdown Style) */
+.score-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 14px;
+}
+
+.score-row:last-child {
+    border-bottom: none;
+}
+
+.score-row-value {
+    font-weight: 600;
+}
+
+/* Highlight Box (Recommendations) */
+.insight-box {
+    background: #f8fafc;
+    border-left: 4px solid #3b82f6;
+    padding: 18px;
+    border-radius: 12px;
+    margin-top: 18px;
+    font-size: 14px;
+}
+
+/* Cost Breakdown Grid */
+.cost-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.cost-item h4 {
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.cost-item p {
+    font-size: 20px;
+    font-weight: 600;
+}
+/* ===============================
+   MICRO-INTERACTIONS (FINANCE)
+================================ */
+
+/* Smooth section entrance */
+.enterprise-card {
+    animation: fadeInUp 0.5s ease forwards;
+    opacity: 0;
+}
+
+.enterprise-card:nth-of-type(1) { animation-delay: 0.05s; }
+.enterprise-card:nth-of-type(2) { animation-delay: 0.1s; }
+.enterprise-card:nth-of-type(3) { animation-delay: 0.15s; }
+.enterprise-card:nth-of-type(4) { animation-delay: 0.2s; }
+.enterprise-card:nth-of-type(5) { animation-delay: 0.25s; }
+
+@keyframes fadeInUp {
+    from {
+        transform: translateY(8px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* KPI hover lift */
+.kpi-card {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(15,23,42,0.08);
+}
+
+/* Badge soft pulse */
+.score-badge {
+    transition: all 0.3s ease;
+}
+
+.score-badge:hover {
+    transform: scale(1.05);
+}
+/* ================================
+   SHIMMER LOADING
+================================ */
+
+.shimmer {
+    background: linear-gradient(
+        90deg,
+        #f1f5f9 25%,
+        #e2e8f0 50%,
+        #f1f5f9 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 12px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+/* Page Fade */
+.stApp {
+    animation: pageFade 0.4s ease;
+}
+
+@keyframes pageFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.js-plotly-plot {
+    transition: transform 0.2s ease;
+}
+
+.js-plotly-plot:hover {
+    transform: translateY(-2px);
 }

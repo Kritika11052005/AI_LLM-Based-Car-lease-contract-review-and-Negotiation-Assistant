@@ -1,5 +1,5 @@
 import json
-from app.services.llm_client import call_llm
+from app.services.llm_client import call_extraction_llm
 
 
 # =========================================================
@@ -75,7 +75,7 @@ Contract text:
 
     try:
 
-        raw = call_llm(PROMPT)
+        raw = call_extraction_llm(PROMPT)
 
         if not raw:
             print("⚠️ SLA extraction returned empty response")

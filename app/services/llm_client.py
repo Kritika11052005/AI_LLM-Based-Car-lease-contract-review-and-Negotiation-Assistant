@@ -12,85 +12,70 @@ OPENROUTER_HEADERS = {
     "Content-Type": "application/json",
 }
 
-OPENROUTER_MODELS = [
-    "mistralai/mistral-small-3.1-24b-instruct"
-]
-
+OPENROUTER_MODEL = "mistralai/mistral-small-3.1-24b-instruct"
 OLLAMA_MODEL = "llama3"
 
 
 
-def call_llm(prompt: str) -> str:
-    
-    print("\nStarting LLM request...")
+# ==========================================================
+# EXTRACTION LLM (OpenRouter Only)
+# ==========================================================
 
+def call_extraction_llm(prompt: str) -> str:
 
-    if OPENROUTER_API_KEY:
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY not configured.")
 
-        for model in OPENROUTER_MODELS:
-
-            payload = {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a contract analysis assistant. Always return clean JSON when requested."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": 0,
-                "max_tokens": 1200
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a contract analysis assistant. Always return clean JSON only."
+            },
+            {
+                "role": "user",
+                "content": prompt
             }
-
-            try:
-                print(f"Trying OpenRouter model: {model}")
-
-                response = requests.post(
-                    OPENROUTER_URL,
-                    headers=OPENROUTER_HEADERS,
-                    json=payload,
-                    timeout=60
-                )
-
-                if response.status_code == 200:
-
-                    content = response.json()["choices"][0]["message"]["content"]
-
-                    print("✅ OpenRouter success")
-
-                    return content
-
-                else:
-
-                    print(f"⚠️ OpenRouter failed: {response.text}")
-
-            except Exception as e:
-
-                print(f"⚠️ OpenRouter crashed: {e}")
-
-    else:
-        print("⚠️ No OPENROUTER_API_KEY found. Skipping OpenRouter.")
-
-
-
-
-
-    print("🔁 Falling back to Ollama...")
+        ],
+        "temperature": 0,
+        "max_tokens": 1500
+    }
 
     try:
+        response = requests.post(
+            OPENROUTER_URL,
+            headers=OPENROUTER_HEADERS,
+            json=payload,
+            timeout=60
+        )
 
-        ollama_payload = {
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0
-            }
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"]
+
+        raise RuntimeError(f"OpenRouter failed: {response.text}")
+
+    except Exception as e:
+        raise RuntimeError(f"OpenRouter crashed: {str(e)}")
+
+
+
+# ==========================================================
+# NEGOTIATION LLM (Ollama Only)
+# ==========================================================
+
+def call_negotiation_llm(prompt: str) -> str:
+
+    ollama_payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.6
         }
+    }
 
+    try:
         response = requests.post(
             OLLAMA_URL,
             json=ollama_payload,
@@ -98,33 +83,27 @@ def call_llm(prompt: str) -> str:
         )
 
         if response.status_code == 200:
-
             result = response.json().get("response")
-
             if result:
-                print("✅ Ollama success")
                 return result
 
-            else:
-                print("⚠️ Ollama returned empty response")
-
-        else:
-            print("⚠️ Ollama failed:", response.text)
+        raise RuntimeError(f"Ollama failed: {response.text}")
 
     except Exception as e:
-
-        print("⚠️ Ollama crashed:", e)
-
+        raise RuntimeError(f"Ollama crashed: {str(e)}")
 
 
-    print("❌ All LLM providers failed. Returning safe fallback JSON.")
 
-    return """
-{
-  "fairness_score": 50,
-  "rating": "Unknown",
-  "explanation": "LLM providers unavailable. Fallback response used.",
-  "negotiation_power": "Unknown",
-  "recommended_action": "Retry later or check LLM configuration."
-}
-"""
+# ==========================================================
+# OPTIONAL TASK ROUTER
+# ==========================================================
+
+def call_llm(prompt: str, task_type: str = "negotiation") -> str:
+
+    if task_type == "extraction":
+        return call_extraction_llm(prompt)
+
+    if task_type == "negotiation":
+        return call_negotiation_llm(prompt)
+
+    raise ValueError("Invalid task_type. Use 'extraction' or 'negotiation'.")

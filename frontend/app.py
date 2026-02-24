@@ -49,21 +49,17 @@ if "contract_filename" not in st.session_state:
 
 with st.sidebar:
 
-    st.markdown("## 🚗 ContractClarity")
+    # Logo / Branding
+    st.markdown("## ContractClarity")
+    st.caption("AI Negotiation Platform")
 
-    st.markdown("Enterprise Lease Intelligence")
+    st.markdown("---")
 
-    if st.session_state.get("contract_filename"):
-
-        st.markdown("---")
-
-        st.markdown(
-            f"**Analyzed Contract:**\n\n"
-            f"{st.session_state.contract_filename}"
-        )
+    # Navigation
+    st.markdown("### Navigation")
 
     page = st.radio(
-        "Navigation",
+        "",
         [
             "Upload Contract",
             "Dashboard",
@@ -73,7 +69,27 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
+    st.markdown("---")
 
+    # Session Info Card (Enterprise Style)
+    st.markdown("### Session Info")
+
+    session_html = f"""
+    <div class="sidebar-session">
+        <div><strong>Contract ID:</strong> {st.session_state.get("contract_id") or "None"}</div>
+        <div><strong>File:</strong> {st.session_state.get("contract_filename") or "None"}</div>
+    </div>
+    """
+
+    st.markdown(session_html, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Reset button styled
+    if st.button("Reset Session"):
+        st.session_state["contract_id"] = None
+        st.session_state["contract_filename"] = None
+        st.rerun()
 # ---------------- HEADER ----------------
 
 st.markdown("## 🚗 ContractClarity")
