@@ -4,10 +4,7 @@ python-dotenv==1.0.0
 prisma==0.15.0
 langchain==0.1.0
 langchain-google-genai==0.0.6
-langchain-core==0.1.0
-langchain-text-splitters==0.0.1
 langchain-community==0.0.10
-chromadb==0.4.15
 python-multipart==0.0.6
 httpx==0.25.2
 pydantic==1.10.13
@@ -18,3 +15,4 @@ google-generativeai==0.3.2
 requests==2.31.0
 setuptools==68.0.0
 wheel
+chromadb==0.4.15
