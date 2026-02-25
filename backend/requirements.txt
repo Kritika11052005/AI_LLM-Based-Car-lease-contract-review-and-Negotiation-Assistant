@@ -8,3 +8,4 @@ chromadb==0.4.22
 python-multipart
 httpx
 pydantic
+PyPDF2
