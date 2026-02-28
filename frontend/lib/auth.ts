@@ -23,7 +23,7 @@ const TOKEN_EXPIRY = "7d"; // 7 days
 
 export interface User {
   id: string;
-  email: string;
+  email: string | null;  // Fixed: allow null to match Prisma schema
   name: string | null;
   createdAt: Date;
 }
@@ -41,7 +41,7 @@ export interface AuthResult {
 /**
  * Create JWT token
  */
-export async function createToken(userId: string, email: string): Promise<string> {
+export async function createToken(userId: string, email: string | null): Promise<string> {
   return await new SignJWT({ userId, email })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -52,12 +52,12 @@ export async function createToken(userId: string, email: string): Promise<string
 /**
  * Verify JWT token
  */
-export async function verifyToken(token: string): Promise<{ userId: string; email: string } | null> {
+export async function verifyToken(token: string): Promise<{ userId: string; email: string | null } | null> {
   try {
     const { payload } = await jwtVerify(token, SECRET_KEY);
     return {
       userId: payload.userId as string,
-      email: payload.email as string,
+      email: payload.email as string | null,
     };
   } catch {
     return null;
@@ -91,7 +91,7 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
     },
   });
   
-  return user as unknown as User | null;
+  return user;
 }
 
 /**
@@ -214,7 +214,7 @@ export async function loginUser(
     }
     
     // Verify password
-    const isValid = await bcrypt.compare(password, user.passwordHash);
+    const isValid = await bcrypt.compare(password, user.passwordHash ?? "");
     
     if (!isValid) {
       return {
