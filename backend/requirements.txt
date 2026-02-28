@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-dotenv
-prisma
+prisma==0.11.0
 PyPDF2
 Pillow
 pytesseract
