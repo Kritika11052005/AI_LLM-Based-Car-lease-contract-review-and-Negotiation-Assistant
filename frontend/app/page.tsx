@@ -2,15 +2,15 @@
 
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import Header from '@/components/shared/Header';
-import Problem from '@/components/landing/Problem';
-import HowItWorks from '@/components/landing/HowItWorks';
-import Features from '@/components/landing/Features';
-import LivePreview from '@/components/landing/LivePreview';
-import FinalCTA from '@/components/landing/FinalCTA';
-import Footer from '@/components/landing/Footer';
 
+const Header = dynamic(() => import('@/components/shared/Header'), { ssr: false });
 const Hero = dynamic(() => import('@/components/landing/Hero3D'), { ssr: false });
+const Problem = dynamic(() => import('@/components/landing/Problem'), { ssr: false });
+const HowItWorks = dynamic(() => import('@/components/landing/HowItWorks'), { ssr: false });
+const Features = dynamic(() => import('@/components/landing/Features'), { ssr: false });
+const LivePreview = dynamic(() => import('@/components/landing/LivePreview'), { ssr: false });
+const FinalCTA = dynamic(() => import('@/components/landing/FinalCTA'), { ssr: false });
+const Footer = dynamic(() => import('@/components/landing/Footer'), { ssr: false });
 
 export default function LandingPage() {
   useEffect(() => {
