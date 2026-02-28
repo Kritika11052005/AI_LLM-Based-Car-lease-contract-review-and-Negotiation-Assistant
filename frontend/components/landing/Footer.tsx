@@ -12,19 +12,19 @@ export default function Footer() {
     {
       name: 'LinkedIn',
       icon: Linkedin,
-      href: 'https://linkedin.com',
+      href: 'https://www.linkedin.com/in/kritika-benjwal/',
       color: 'hsl(var(--color-primary))',
     },
     {
       name: 'GitHub',
       icon: Github,
-      href: 'https://github.com',
+      href: 'https://github.com/Kritika11052005',
       color: 'hsl(var(--color-foreground))',
     },
     {
       name: 'Email',
       icon: Mail,
-      href: 'mailto:hello@leasemaster.ai',
+      href: 'mailto:ananya.benjwal@gmail.com',
       color: 'hsl(var(--color-secondary))',
     },
   ];
