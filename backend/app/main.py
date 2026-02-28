@@ -22,12 +22,10 @@ app.add_middleware(
 
 
 @app.on_event("startup")
+@app.on_event("startup")
 async def startup():
-    try:
-        await db.connect()
-        print("DB CONNECTED SUCCESSFULLY")
-    except Exception as e:
-        print("DB CONNECTION FAILED:", e)
+    await db.connect()
+    print("DB CONNECTED SUCCESSFULLY")
 
 
 @app.on_event("shutdown")
