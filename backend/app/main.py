@@ -25,8 +25,9 @@ app.add_middleware(
 async def startup():
     try:
         await db.connect()
-    except EngineConnectionError as exc:
-        logging.error("Database connection failed: %s", exc)
+        print("DB CONNECTED SUCCESSFULLY")
+    except Exception as e:
+        print("DB CONNECTION FAILED:", e)
 
 
 @app.on_event("shutdown")
