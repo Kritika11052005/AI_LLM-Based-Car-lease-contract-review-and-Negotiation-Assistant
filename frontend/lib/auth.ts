@@ -91,7 +91,7 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
     },
   });
   
-  return user;
+  return user as unknown as User | null;
 }
 
 /**
