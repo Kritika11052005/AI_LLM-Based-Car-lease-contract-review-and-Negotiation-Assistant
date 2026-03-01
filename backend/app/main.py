@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
+
 @app.on_event("startup")
 async def startup():
     await db.connect()
