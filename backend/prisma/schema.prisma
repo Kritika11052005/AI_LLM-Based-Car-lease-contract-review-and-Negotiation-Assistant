@@ -6,6 +6,7 @@ generator client {
   output   = "../app/generated/prisma"
   recursive_type_depth = -1
   enable_experimental_decimal = true
+  binary_targets = ["debian-openssl-3.0.x"]
 }
 
 datasource db {
