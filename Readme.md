@@ -1,4 +1,4 @@
-# 🚗 AI Car Lease Contract Review & Negotiation Assistant
+# 🛡️ LeaseGaurd - 🚗 AI Car Lease Contract Review & Negotiation Assistant
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
@@ -123,7 +123,7 @@
 
 ### External APIs
 - **VIN Lookup**: NHTSA Vehicle API, Data.gov
-- **Price Estimation**: Edmunds API, TrueCar (when available)
+- **Price Estimation**: MARKETCHECK API, TrueCar (when available)
 - **Geocoding**: Google Maps API (optional)
 - **Market Data**: OpenDataSoft vehicle datasets
 
@@ -379,9 +379,9 @@ DATABASE_URL="postgresql://user:pass@your-neon-db.neon.tech/dbname?sslmode=requi
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}?format=json"
 NHTSA_RECALL_URL = "https://api.nhtsa.gov/recalls/recallsByVehicle?make={make}&model={model}&modelYear={year}"
 
-# Optional: MARKETPLACE API
-MARKETPLACE_API_KEY="your-api-key"
-MARKETPLACE_SECRET_API_KEY="your-secret-api-key"
+# Optional: MARKETCHECK API
+MARKETCHECK_API_KEY="your-api-key"
+MARKETCHECK_SECRET_API_KEY="your-secret-api-key"
 ```
 
 ```bash
@@ -624,14 +624,14 @@ car-lease-ai-assistant/
 | `DATABASE_URL` | PostgreSQL connection | ✅ Yes |
 | `JWT_SECRET` | JWT secret key | ✅ Yes |
 | `JWT_ALGORITHM` | JWT algorithm | ✅ Yes |
-| `MARKETPLACE_API_KEY` | MARKETPLACE API key | ✅ Yes |
-| `MARKETPLACE_API_SECRET_KEY` | MARKETPLACE API Secret key | ✅ Yes |
+| `MARKETCHECK_API_KEY` | MARKETCHECK API key | ✅ Yes |
+| `MARKETCHECK_API_SECRET_KEY` | MARKETCHECK API Secret key | ✅ Yes |
 
 ### Getting API Keys
 
 1. **Google Gemini API**: [Google AI Studio](https://ai.google.dev/)
 2. **NeonDB**: [neon.tech](https://neon.tech/) (Free tier available)
-3. **Edmunds API**: [developer.edmunds.com](https://developer.edmunds.com/) (Optional)
+3. **MARKETCHECK API**: [www.marketcheck.com/apis](https://www.marketcheck.com/apis/cars/) (Optional)
 
 ---
 
@@ -957,7 +957,7 @@ SOFTWARE.
 
 ⭐ **Star this repo if you find it helpful!**
 
-[🔗 Live Demo](#) | [📧 Contact](mailto:ananya.benjwal@gmail.com) | [💼 Contribute](#contributing)
+[🔗 Live Demo](https://ai-llm-based-car-lease-contract-rev.vercel.app/) | [📧 Contact](mailto:ananya.benjwal@gmail.com) | [💼 Contribute](#contributing)
 
 ---
 
