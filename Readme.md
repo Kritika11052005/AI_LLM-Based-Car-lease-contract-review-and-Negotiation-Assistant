@@ -877,7 +877,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ```
 MIT License
 
-Copyright (c) 2025 [Your Name]
+Copyright (c) 2025 [Kritika Benjwal]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -904,7 +904,7 @@ SOFTWARE.
 
 <div align="center">
 
-### Built with ❤️ by [Your Name]
+### Built with ❤️ by [Kritika Benjwal]
 
 </div>
 
@@ -957,7 +957,7 @@ SOFTWARE.
 
 ⭐ **Star this repo if you find it helpful!**
 
-[🔗 Live Demo](https://ai-llm-based-car-lease-contract-rev.vercel.app/) | [📧 Contact](mailto:ananya.benjwal@gmail.com) | [💼 Contribute](#contributing)
+[🔗 Live Demo-Frontend](https://ai-llm-based-car-lease-contract-rev.vercel.app/) |[🔗 Live Demo-Backend](https://ai-llm-based-car-lease-contract-review-kwjr.onrender.com/) | [📧 Contact](mailto:ananya.benjwal@gmail.com) | [💼 Contribute](#contributing)
 
 ---
 
