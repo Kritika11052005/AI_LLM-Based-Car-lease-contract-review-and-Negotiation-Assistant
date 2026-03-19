@@ -52,7 +52,7 @@ export default function Footer() {
           </Link>
             </div>
             <p className="text-sm text-[hsl(var(--color-muted-foreground))]">
-              © {currentYear} Your Name. All rights reserved.
+              © {currentYear} Kritika Benjwal. All rights reserved.
             </p>
           </motion.div>
 
