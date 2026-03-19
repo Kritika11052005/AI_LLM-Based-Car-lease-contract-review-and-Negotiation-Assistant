@@ -57,17 +57,23 @@ export default function Footer() {
           </motion.div>
 
           {/* Center - Links */}
-          <motion.div
-            className="flex flex-wrap justify-center gap-8"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            <span className='text-center'>
-                Made with ❤️ by Kritika Benjwal
-            </span>
-          </motion.div>
+          {/* Center - Links */}
+<motion.div
+  className="flex flex-wrap justify-center gap-8"
+  initial={{ opacity: 0, y: 20 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  viewport={{ once: true }}
+  transition={{ duration: 0.6, delay: 0.1 }}
+>
+  <div className="flex flex-col items-center gap-1">
+    <span className='text-center'>
+      Made with ❤️ by Kritika Benjwal
+    </span>
+    <span className='text-center text-sm text-[hsl(var(--color-muted-foreground))]'>
+      Made for Infosys Springboard Internship
+    </span>
+  </div>
+</motion.div>
 
           {/* Right side - Social links */}
           <motion.div
