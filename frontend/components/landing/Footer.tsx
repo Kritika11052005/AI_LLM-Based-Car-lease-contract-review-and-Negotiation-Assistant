@@ -70,7 +70,7 @@ export default function Footer() {
       Made with ❤️ by Kritika Benjwal
     </span>
     <span className='text-center text-sm text-[hsl(var(--color-muted-foreground))]'>
-      Made for Infosys Springboard Internship
+      Made for Infosys Springboard Internship 6.0
     </span>
   </div>
 </motion.div>
