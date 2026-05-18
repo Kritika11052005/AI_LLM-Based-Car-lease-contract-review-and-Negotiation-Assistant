@@ -123,9 +123,8 @@
 
 ### External APIs
 - **VIN Lookup**: NHTSA Vehicle API, Data.gov
-- **Price Estimation**: MARKETCHECK API, TrueCar (when available)
-- **Geocoding**: Google Maps API (optional)
-- **Market Data**: OpenDataSoft vehicle datasets
+- **Price Estimation**: MARKETCHECK API
+
 
 ### Development Tools
 - **Package Managers**: npm (frontend), pip (backend)
